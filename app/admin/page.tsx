@@ -12,21 +12,22 @@ import Link from 'next/link';
 export default function AdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('admin@the1000.ma');
-  const [password, setPassword] = useState('admin123');
+  const [password, setPassword] = useState('Admin1234!');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const currentUser = userService.getCurrentUser();
-    if (currentUser?.role === 'admin') {
-      router.push('/admin/dashboard');
-    }
+    userService.getCurrentUser().then(currentUser => {
+      if (currentUser?.role === 'admin') {
+        router.push('/admin/dashboard');
+      }
+    });
   }, [router]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const user = userService.login(email, password);
+    const user = await userService.login(email, password);
 
     if (!user) {
       setError('Invalid email or password');
@@ -35,7 +36,7 @@ export default function AdminLoginPage() {
 
     if (user.role !== 'admin') {
       setError('Access denied. Admin credentials required.');
-      userService.logout();
+      await userService.logout();
       return;
     }
 
@@ -150,7 +151,7 @@ export default function AdminLoginPage() {
 
           <div className="mt-6 rounded-xl bg-violet-50 border border-violet-100 p-4 text-sm">
             <p className="font-semibold text-violet-700 mb-1">Demo Credentials</p>
-            <p className="text-violet-600/80">admin@the1000.ma / admin123</p>
+            <p className="text-violet-600/80">admin@the1000.ma / Admin1234!</p>
           </div>
         </div>
       </div>

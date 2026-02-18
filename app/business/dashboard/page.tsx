@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { createClient } from '@/lib/supabase/client';
 import { userService, businessService, deliveryService, riderService } from '@/lib/storage';
 import {
   MapPin,
@@ -22,12 +23,12 @@ import {
   Navigation,
   ArrowRight,
 } from 'lucide-react';
-import type { Business, Delivery, Rider } from '@/lib/types';
+import type { User, Business, Delivery, Rider } from '@/lib/types';
 import Link from 'next/link';
 
 export default function BusinessDashboardPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState(userService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [availableRiders, setAvailableRiders] = useState<Rider[]>([]);
@@ -36,33 +37,47 @@ export default function BusinessDashboardPage() {
   const [dropoffAddress, setDropoffAddress] = useState('');
 
   useEffect(() => {
-    const user = userService.getCurrentUser();
-    if (!user || user.role !== 'business') {
-      router.push('/business');
-      return;
-    }
-    setCurrentUser(user);
-    loadData(user.id);
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const interval = setInterval(() => loadData(user.id), 5000);
-    return () => clearInterval(interval);
+    async function init() {
+      const user = await userService.getCurrentUser();
+      if (!user || user.role !== 'business') {
+        router.push('/business');
+        return;
+      }
+      setCurrentUser(user);
+      await loadData(user.id);
+
+      // Get business ID for filtered subscription
+      const biz = await businessService.getByUserId(user.id);
+
+      channel = supabase.channel('business-dashboard')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => { loadData(user.id); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => { loadData(user.id); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, () => { loadData(user.id); })
+        .subscribe();
+    }
+    init();
+
+    return () => { if (channel) supabase.removeChannel(channel); };
   }, [router]);
 
-  const loadData = (userId: string) => {
-    const biz = businessService.getByUserId(userId);
+  const loadData = async (userId: string) => {
+    const biz = await businessService.getByUserId(userId);
     if (biz) {
       setBusiness(biz);
-      setDeliveries(deliveryService.getByBusinessId(biz.id));
+      setDeliveries(await deliveryService.getByBusinessId(biz.id));
     }
-    setAvailableRiders(riderService.getAvailable());
+    setAvailableRiders(await riderService.getAvailable());
   };
 
-  const handleLogout = () => {
-    userService.logout();
+  const handleLogout = async () => {
+    await userService.logout();
     router.push('/business');
   };
 
-  const handleRequestDelivery = (e: React.FormEvent) => {
+  const handleRequestDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!business) return;
 
@@ -71,7 +86,7 @@ export default function BusinessDashboardPage() {
       return;
     }
 
-    const riders = riderService.getAvailable();
+    const riders = await riderService.getAvailable();
     if (riders.length === 0) {
       alert('No riders available at the moment. Please try again shortly.');
       return;
@@ -79,7 +94,7 @@ export default function BusinessDashboardPage() {
 
     const selectedRider = riders[0];
 
-    const newDelivery = deliveryService.create({
+    const newDelivery = await deliveryService.create({
       business_id: business.id,
       business_name: business.name,
       rider_id: null,
@@ -101,13 +116,13 @@ export default function BusinessDashboardPage() {
       completed_at: null,
     });
 
-    deliveryService.assignRider(newDelivery.id, selectedRider.id);
+    await deliveryService.assignRider(newDelivery.id, selectedRider.id);
 
     if (business.subscription_tier !== 'none') {
-      businessService.useRide(business.id);
+      await businessService.useRide(business.id);
     }
 
-    loadData(currentUser!.id);
+    await loadData(currentUser!.id);
     setPickupAddress('');
     setDropoffAddress('');
     setShowRequestDialog(false);

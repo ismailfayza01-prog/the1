@@ -12,21 +12,22 @@ import Link from 'next/link';
 export default function BusinessLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('pharmacie@example.ma');
-  const [password, setPassword] = useState('business123');
+  const [password, setPassword] = useState('Business1234!');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const currentUser = userService.getCurrentUser();
-    if (currentUser?.role === 'business') {
-      router.push('/business/dashboard');
-    }
+    userService.getCurrentUser().then(currentUser => {
+      if (currentUser?.role === 'business') {
+        router.push('/business/dashboard');
+      }
+    });
   }, [router]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const user = userService.login(email, password);
+    const user = await userService.login(email, password);
 
     if (!user) {
       setError('Invalid email or password');
@@ -35,7 +36,7 @@ export default function BusinessLoginPage() {
 
     if (user.role !== 'business') {
       setError('Access denied. Business credentials required.');
-      userService.logout();
+      await userService.logout();
       return;
     }
 
@@ -153,8 +154,8 @@ export default function BusinessLoginPage() {
 
           <div className="mt-6 rounded-xl bg-sky-50 border border-sky-100 p-4 text-sm">
             <p className="font-semibold text-sky-700 mb-1">Demo Credentials</p>
-            <p className="text-sky-600/80">pharmacie@example.ma / business123</p>
-            <p className="text-sky-500/60 text-xs mt-1">or cafe@example.ma / business123</p>
+            <p className="text-sky-600/80">pharmacie@example.ma / Business1234!</p>
+            <p className="text-sky-500/60 text-xs mt-1">or cafe@example.ma / Business1234!</p>
           </div>
         </div>
       </div>

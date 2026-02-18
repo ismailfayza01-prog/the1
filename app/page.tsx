@@ -1,17 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { MapPin, Users, BarChart3, ArrowRight, Zap, Shield, TrendingUp, Globe } from 'lucide-react';
-import { initializeDefaultData } from '@/lib/storage';
 
 export default function HomePage() {
   const router = useRouter();
-
-  useEffect(() => {
-    initializeDefaultData();
-  }, []);
 
   const apps = [
     {
@@ -190,17 +184,17 @@ export default function HomePage() {
             <div className="rounded-xl bg-violet-50 border border-violet-100 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-violet-500 mb-2">Admin</p>
               <p className="text-sm text-foreground font-medium">admin@the1000.ma</p>
-              <p className="text-sm text-muted-foreground">admin123</p>
+              <p className="text-sm text-muted-foreground">Admin1234!</p>
             </div>
             <div className="rounded-xl bg-sky-50 border border-sky-100 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-sky-500 mb-2">Business</p>
               <p className="text-sm text-foreground font-medium">pharmacie@example.ma</p>
-              <p className="text-sm text-muted-foreground">business123</p>
+              <p className="text-sm text-muted-foreground">Business1234!</p>
             </div>
             <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-2">Rider</p>
               <p className="text-sm text-foreground font-medium">rider1@the1000.ma</p>
-              <p className="text-sm text-muted-foreground">rider123</p>
+              <p className="text-sm text-muted-foreground">Rider1234!</p>
             </div>
           </div>
         </div>

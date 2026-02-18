@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { userService, riderService, deliveryService } from '@/lib/storage';
+import { createClient } from '@/lib/supabase/client';
 import { getRiderCommission } from '@/lib/types';
 import {
   MapPin,
@@ -22,95 +23,118 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
-import type { Rider, Delivery } from '@/lib/types';
+import type { User, Rider, Delivery } from '@/lib/types';
 import Link from 'next/link';
 
 export default function RiderDashboardPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState(userService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [rider, setRider] = useState<Rider | null>(null);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [pendingDeliveries, setPendingDeliveries] = useState<Delivery[]>([]);
   const [isOnline, setIsOnline] = useState(false);
 
   useEffect(() => {
-    const user = userService.getCurrentUser();
-    if (!user || user.role !== 'rider') {
-      router.push('/rider');
-      return;
-    }
-    setCurrentUser(user);
-    const riderData = riderService.getByUserId(user.id);
-    if (riderData) {
-      setRider(riderData);
-      setIsOnline(riderData.status !== 'offline');
-      setDeliveries(deliveryService.getByRiderId(riderData.id));
-    }
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let locationInterval: NodeJS.Timeout | null = null;
+    let userId: string | null = null;
+    let riderId: string | null = null;
 
-    const interval = setInterval(() => {
-      const r = riderService.getByUserId(user.id);
-      if (r && r.status !== 'offline') {
-        const newLat = 35.7595 + (Math.random() - 0.5) * 0.02;
-        const newLng = -5.8340 + (Math.random() - 0.5) * 0.02;
-        riderService.updateLocation(r.id, { lat: newLat, lng: newLng });
+    async function init() {
+      const user = await userService.getCurrentUser();
+      if (!user || user.role !== 'rider') {
+        router.push('/rider');
+        return;
       }
-    }, 10000);
+      userId = user.id;
+      setCurrentUser(user);
+      const riderData = await riderService.getByUserId(user.id);
+      if (riderData) {
+        riderId = riderData.id;
+        setRider(riderData);
+        setIsOnline(riderData.status !== 'offline');
+        setDeliveries(await deliveryService.getByRiderId(riderData.id));
+        setPendingDeliveries((await deliveryService.getActive()).filter(d => d.status === 'pending' && !d.rider_id));
+      }
 
-    const refreshInterval = setInterval(() => {
-      const r = riderService.getByUserId(user.id);
-      if (r) {
-        setRider(r);
-        setDeliveries(deliveryService.getByRiderId(r.id));
-      }
-    }, 3000);
+      // Location update interval (active GPS simulation)
+      locationInterval = setInterval(async () => {
+        if (!riderId) return;
+        const r = await riderService.getByUserId(userId!);
+        if (r && r.status !== 'offline') {
+          const newLat = 35.7595 + (Math.random() - 0.5) * 0.02;
+          const newLng = -5.8340 + (Math.random() - 0.5) * 0.02;
+          await riderService.updateLocation(r.id, { lat: newLat, lng: newLng });
+        }
+      }, 10000);
+
+      // Realtime subscriptions
+      channel = supabase.channel('rider-dashboard')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, async () => {
+          if (riderId) {
+            setDeliveries(await deliveryService.getByRiderId(riderId));
+            setPendingDeliveries((await deliveryService.getActive()).filter(d => d.status === 'pending' && !d.rider_id));
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, async () => {
+          if (userId) {
+            const r = await riderService.getByUserId(userId);
+            if (r) setRider(r);
+          }
+        })
+        .subscribe();
+    }
+    init();
 
     return () => {
-      clearInterval(interval);
-      clearInterval(refreshInterval);
+      if (locationInterval) clearInterval(locationInterval);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [router]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (rider) {
-      riderService.updateStatus(rider.id, 'offline');
+      await riderService.updateStatus(rider.id, 'offline');
     }
-    userService.logout();
+    await userService.logout();
     router.push('/rider');
   };
 
-  const handleToggleStatus = (checked: boolean) => {
+  const handleToggleStatus = async (checked: boolean) => {
     if (!rider) return;
     setIsOnline(checked);
-    riderService.updateStatus(rider.id, checked ? 'available' : 'offline');
-    const updatedRider = riderService.getById(rider.id);
+    await riderService.updateStatus(rider.id, checked ? 'available' : 'offline');
+    const updatedRider = await riderService.getById(rider.id);
     if (updatedRider) setRider(updatedRider);
   };
 
-  const handleAcceptDelivery = (deliveryId: string) => {
+  const handleAcceptDelivery = async (deliveryId: string) => {
     if (!rider) return;
-    deliveryService.update(deliveryId, {
+    await deliveryService.update(deliveryId, {
       status: 'accepted',
       accepted_at: new Date().toISOString(),
     });
-    riderService.updateStatus(rider.id, 'busy');
-    setDeliveries(deliveryService.getByRiderId(rider.id));
-    const updatedRider = riderService.getById(rider.id);
+    await riderService.updateStatus(rider.id, 'busy');
+    setDeliveries(await deliveryService.getByRiderId(rider.id));
+    const updatedRider = await riderService.getById(rider.id);
     if (updatedRider) setRider(updatedRider);
   };
 
-  const handleMarkPickedUp = (deliveryId: string) => {
-    deliveryService.update(deliveryId, {
+  const handleMarkPickedUp = async (deliveryId: string) => {
+    await deliveryService.update(deliveryId, {
       status: 'picked_up',
       picked_up_at: new Date().toISOString(),
     });
-    setDeliveries(deliveryService.getByRiderId(rider!.id));
+    setDeliveries(await deliveryService.getByRiderId(rider!.id));
   };
 
-  const handleMarkInTransit = (deliveryId: string) => {
-    deliveryService.update(deliveryId, { status: 'in_transit' });
-    setDeliveries(deliveryService.getByRiderId(rider!.id));
+  const handleMarkInTransit = async (deliveryId: string) => {
+    await deliveryService.update(deliveryId, { status: 'in_transit' });
+    setDeliveries(await deliveryService.getByRiderId(rider!.id));
   };
 
-  const handleMarkDelivered = (deliveryId: string) => {
+  const handleMarkDelivered = async (deliveryId: string) => {
     if (!rider) return;
     const delivery = deliveries.find(d => d.id === deliveryId);
     if (!delivery) return;
@@ -119,27 +143,26 @@ export default function RiderDashboardPage() {
       ? Math.round((Date.now() - new Date(delivery.picked_up_at).getTime()) / 60000)
       : delivery.estimated_duration;
 
-    deliveryService.update(deliveryId, {
+    await deliveryService.update(deliveryId, {
       status: 'delivered',
       completed_at: new Date().toISOString(),
       actual_duration: actualDuration,
     });
 
-    riderService.update(rider.id, {
+    await riderService.update(rider.id, {
       total_deliveries: rider.total_deliveries + 1,
       earnings_this_month: rider.earnings_this_month + delivery.rider_commission,
       status: 'available',
     });
 
-    setDeliveries(deliveryService.getByRiderId(rider.id));
-    const updatedRider = riderService.getById(rider.id);
+    setDeliveries(await deliveryService.getByRiderId(rider.id));
+    const updatedRider = await riderService.getById(rider.id);
     if (updatedRider) setRider(updatedRider);
   };
 
   if (!currentUser || !rider) return null;
 
   const activeDelivery = deliveries.find(d => ['accepted', 'picked_up', 'in_transit'].includes(d.status));
-  const pendingDeliveries = deliveryService.getActive().filter(d => d.status === 'pending' && !d.rider_id);
   const completedDeliveries = deliveries.filter(d => d.status === 'delivered');
 
   const currentTier = getRiderCommission(rider.total_deliveries);

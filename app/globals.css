@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 :root {
   /* Modern bright & calm color palette - Sky/Teal/Indigo inspired */
@@ -150,11 +148,17 @@ body {
 
 /* Status badges */
 .status-online {
-  @apply bg-emerald-100 text-emerald-700 border-emerald-200;
+  background-color: #d1fae5;
+  color: #047857;
+  border-color: #a7f3d0;
 }
 .status-busy {
-  @apply bg-amber-100 text-amber-700 border-amber-200;
+  background-color: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
 }
 .status-offline {
-  @apply bg-slate-100 text-slate-500 border-slate-200;
+  background-color: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
 }

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { userService, riderService, businessService, deliveryService } from '@/lib/storage';
+import { createClient } from '@/lib/supabase/client';
 import {
   MapPin,
   Users,
@@ -18,37 +19,48 @@ import {
   Home,
   BarChart3,
 } from 'lucide-react';
-import type { Rider, Business, Delivery } from '@/lib/types';
+import type { User, Rider, Business, Delivery } from '@/lib/types';
 import Link from 'next/link';
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState(userService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
 
   useEffect(() => {
-    const user = userService.getCurrentUser();
-    if (!user || user.role !== 'admin') {
-      router.push('/admin');
-      return;
-    }
-    setCurrentUser(user);
-    loadData();
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
+    async function init() {
+      const user = await userService.getCurrentUser();
+      if (!user || user.role !== 'admin') {
+        router.push('/admin');
+        return;
+      }
+      setCurrentUser(user);
+      await loadData();
+
+      channel = supabase.channel('admin-dashboard')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, () => { loadData(); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => { loadData(); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => { loadData(); })
+        .subscribe();
+    }
+    init();
+
+    return () => { if (channel) supabase.removeChannel(channel); };
   }, [router]);
 
-  const loadData = () => {
-    setRiders(riderService.getAll());
-    setBusinesses(businessService.getAll());
-    setDeliveries(deliveryService.getAll());
+  const loadData = async () => {
+    setRiders(await riderService.getAll());
+    setBusinesses(await businessService.getAll());
+    setDeliveries(await deliveryService.getAll());
   };
 
-  const handleLogout = () => {
-    userService.logout();
+  const handleLogout = async () => {
+    await userService.logout();
     router.push('/admin');
   };
 

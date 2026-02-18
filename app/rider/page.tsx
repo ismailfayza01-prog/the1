@@ -12,21 +12,22 @@ import Link from 'next/link';
 export default function RiderLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('rider1@the1000.ma');
-  const [password, setPassword] = useState('rider123');
+  const [password, setPassword] = useState('Rider1234!');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const currentUser = userService.getCurrentUser();
-    if (currentUser?.role === 'rider') {
-      router.push('/rider/dashboard');
-    }
+    userService.getCurrentUser().then(currentUser => {
+      if (currentUser?.role === 'rider') {
+        router.push('/rider/dashboard');
+      }
+    });
   }, [router]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const user = userService.login(email, password);
+    const user = await userService.login(email, password);
 
     if (!user) {
       setError('Invalid email or password');
@@ -35,7 +36,7 @@ export default function RiderLoginPage() {
 
     if (user.role !== 'rider') {
       setError('Access denied. Rider credentials required.');
-      userService.logout();
+      await userService.logout();
       return;
     }
 
@@ -172,8 +173,8 @@ export default function RiderLoginPage() {
 
           <div className="mt-6 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm">
             <p className="font-semibold text-emerald-700 mb-1">Demo Credentials</p>
-            <p className="text-emerald-600/80">rider1@the1000.ma / rider123</p>
-            <p className="text-emerald-500/60 text-xs mt-1">or rider2@the1000.ma / rider123</p>
+            <p className="text-emerald-600/80">rider1@the1000.ma / Rider1234!</p>
+            <p className="text-emerald-500/60 text-xs mt-1">or rider2@the1000.ma / Rider1234!</p>
           </div>
         </div>
       </div>
