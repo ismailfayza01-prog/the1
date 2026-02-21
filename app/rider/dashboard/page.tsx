@@ -66,7 +66,14 @@ export default function RiderDashboardPage() {
         if (r && r.status !== 'offline') {
           const newLat = 35.7595 + (Math.random() - 0.5) * 0.02;
           const newLng = -5.8340 + (Math.random() - 0.5) * 0.02;
-          await riderService.updateLocation(r.id, { lat: newLat, lng: newLng });
+          const prevLat = typeof r.last_lat === 'number' ? r.last_lat : (r.current_location as { lat: number; lng: number } | null)?.lat;
+          const prevLng = typeof r.last_lng === 'number' ? r.last_lng : (r.current_location as { lat: number; lng: number } | null)?.lng;
+          const movedEnough = prevLat == null || prevLng == null
+            || Math.hypot(newLat - prevLat, newLng - prevLng) > 0.0002; // ~20m
+
+          if (movedEnough) {
+            await riderService.updateLocation(r.id, { lat: newLat, lng: newLng });
+          }
         }
       }, 5000);
 
