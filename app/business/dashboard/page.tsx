@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { createClient } from '@/lib/supabase/client';
 import { userService, businessService, deliveryService, riderService, transactionService } from '@/lib/storage';
 import {
@@ -226,6 +227,11 @@ export default function BusinessDashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dispatchingDeliveryId, setDispatchingDeliveryId] = useState<string | null>(null);
   const [nowTs, setNowTs] = useState(Date.now());
+  const [otpModalOpen, setOtpModalOpen] = useState(false);
+  const [otpDeliveryId, setOtpDeliveryId] = useState<string | null>(null);
+  const [otpValue, setOtpValue] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -314,6 +320,45 @@ export default function BusinessDashboardPage() {
     } finally {
       setDispatchingDeliveryId(null);
     }
+  };
+
+  const handleOpenOtpModal = (deliveryId: string) => {
+    setOtpDeliveryId(deliveryId);
+    setOtpValue('');
+    setOtpError('');
+    setOtpModalOpen(true);
+  };
+
+  const handleSetOtp = async () => {
+    if (!otpDeliveryId) return;
+    if (!/^\d{4}$/.test(otpValue)) {
+      setOtpError('OTP must be exactly 4 digits.');
+      return;
+    }
+    setOtpSubmitting(true);
+    setOtpError('');
+    try {
+      const res = await deliveryService.setDeliveryOtp(otpDeliveryId, otpValue);
+      if (res?.expires_at) {
+        setSuccessMsg(`OTP set. Expires at ${new Date(res.expires_at).toLocaleTimeString()}`);
+        setTimeout(() => setSuccessMsg(''), 4000);
+      }
+      setOtpModalOpen(false);
+    } catch (err) {
+      setOtpError(err instanceof Error ? err.message : 'Failed to set OTP');
+    } finally {
+      setOtpSubmitting(false);
+    }
+  };
+
+  const handleViewPodPhoto = async (deliveryId: string, photoPath: string) => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .storage
+      .from('delivery-pod')
+      .createSignedUrl(photoPath, 300);
+    if (error || !data?.signedUrl) return;
+    window.open(data.signedUrl, '_blank');
   };
 
   const handleSubscribe = async (tier: 'monthly' | 'annual') => {
@@ -515,8 +560,12 @@ export default function BusinessDashboardPage() {
                 const isOffered = d.status === 'offered';
                 const isPending = d.status === 'pending';
                 const isAccepted = d.status === 'accepted';
+                const isDelivered = d.status === 'delivered';
+                const podMethod = (d as any).pod_method as string | null | undefined;
+                const podPhoto = (d as any).pod_photo_url as string | null | undefined;
                 const canDispatch = isPending;
                 const showCountdown = isPending || isOffered;
+                const canSetOtp = ['accepted', 'picked_up', 'in_transit'].includes(d.status) && !isDelivered;
                 return (
                   <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
                     <div className="min-w-0">
@@ -525,20 +574,45 @@ export default function BusinessDashboardPage() {
                         {isAccepted && d.rider_name && (
                           <span className="text-xs text-muted-foreground">Assigned: {d.rider_name}</span>
                         )}
+                        {isDelivered && podMethod === 'otp' && (
+                          <span className="text-xs text-emerald-600">PoD: OTP verified</span>
+                        )}
+                        {isDelivered && podMethod === 'photo' && (
+                          <span className="text-xs text-emerald-600">PoD: Photo</span>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{d.pickup_address}</p>
                       {showCountdown && (
                         <p className="text-[11px] text-muted-foreground">Timeout: {countdown}s</p>
                       )}
+                      {isDelivered && podMethod === 'photo' && podPhoto && (
+                        <button
+                          className="text-[11px] text-sky-600 hover:text-sky-500"
+                          onClick={() => handleViewPodPhoto(d.id, podPhoto)}
+                        >
+                          View photo
+                        </button>
+                      )}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!canDispatch || dispatchingDeliveryId === d.id || isOffered}
-                      onClick={() => handleDispatchDelivery(d.id, selectedRider?.user_id ?? null)}
-                    >
-                      {isOffered ? 'Searching…' : 'Dispatch'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {canSetOtp && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenOtpModal(d.id)}
+                        >
+                          Set OTP
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!canDispatch || dispatchingDeliveryId === d.id || isOffered}
+                        onClick={() => handleDispatchDelivery(d.id, selectedRider?.user_id ?? null)}
+                      >
+                        {isOffered ? 'Searching…' : 'Dispatch'}
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -838,6 +912,29 @@ export default function BusinessDashboardPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={otpModalOpen} onOpenChange={setOtpModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set Delivery OTP</DialogTitle>
+            <DialogDescription>Enter a 4-digit OTP for this delivery.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={otpValue}
+              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="1234"
+              maxLength={4}
+              inputMode="numeric"
+            />
+            {otpError && <p className="text-xs text-red-500">{otpError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOtpModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleSetOtp} disabled={otpSubmitting}>Save OTP</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

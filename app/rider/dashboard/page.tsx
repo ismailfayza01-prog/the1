@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { userService, riderService, deliveryService } from '@/lib/storage';
 import { createClient } from '@/lib/supabase/client';
 import { getRiderCommission } from '@/lib/types';
@@ -35,6 +36,11 @@ export default function RiderDashboardPage() {
   const [offers, setOffers] = useState<DeliveryOffer[]>([]);
   const [isOnline, setIsOnline] = useState(false);
   const [nowTs, setNowTs] = useState(Date.now());
+  const [otpInput, setOtpInput] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   useEffect(() => {
     const supabase = createClient();
@@ -147,6 +153,52 @@ export default function RiderDashboardPage() {
       setOffers(await deliveryService.getMyOffers());
     } catch (err) {
       console.error('Reject offer error', err);
+    }
+  };
+
+  const handleVerifyOtp = async (deliveryId: string) => {
+    if (!/^\d{4}$/.test(otpInput)) {
+      setOtpError('OTP must be exactly 4 digits.');
+      return;
+    }
+    setOtpSubmitting(true);
+    setOtpError('');
+    try {
+      await deliveryService.verifyDeliveryOtp(deliveryId, otpInput);
+      setOtpInput('');
+      setDeliveries(await deliveryService.getByRiderId(rider!.id));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'OTP verification failed';
+      if (msg.toLowerCase().includes('expired')) {
+        setOtpError('OTP expired. Please request a new code.');
+      } else if (msg.toLowerCase().includes('invalid')) {
+        setOtpError('Invalid OTP. Please try again.');
+      } else {
+        setOtpError(msg);
+      }
+    } finally {
+      setOtpSubmitting(false);
+    }
+  };
+
+  const handleUploadPhoto = async (deliveryId: string, file: File) => {
+    setPhotoUploading(true);
+    setPhotoError('');
+    try {
+      const supabase = createClient();
+      const key = `${deliveryId}/${crypto.randomUUID()}.jpg`;
+      const { error } = await supabase.storage.from('delivery-pod').upload(key, file, {
+        upsert: false,
+        contentType: file.type || 'image/jpeg',
+      });
+      if (error) throw error;
+
+      await deliveryService.submitDeliveryPhoto(deliveryId, key);
+      setDeliveries(await deliveryService.getByRiderId(rider!.id));
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Photo upload failed');
+    } finally {
+      setPhotoUploading(false);
     }
   };
 
@@ -385,6 +437,47 @@ export default function RiderDashboardPage() {
                   </Button>
                 )}
               </div>
+
+              {['accepted', 'picked_up', 'in_transit'].includes(activeDelivery.status) && (
+                <div className="mt-5 space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Proof of Delivery</div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">OTP (4 digits)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={otpInput}
+                        onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="1234"
+                        maxLength={4}
+                        inputMode="numeric"
+                      />
+                      <Button
+                        className="h-10"
+                        onClick={() => handleVerifyOtp(activeDelivery.id)}
+                        disabled={otpSubmitting}
+                      >
+                        Verify
+                      </Button>
+                    </div>
+                    {otpError && <p className="text-xs text-red-500">{otpError}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Photo</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      disabled={photoUploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadPhoto(activeDelivery.id, file);
+                      }}
+                    />
+                    {photoError && <p className="text-xs text-red-500">{photoError}</p>}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

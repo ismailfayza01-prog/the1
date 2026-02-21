@@ -348,6 +348,27 @@ export const deliveryService = {
       .rpc('rider_refuse_offer', { p_offer_id: offerId });
     if (error) throw error;
   },
+
+  setDeliveryOtp: async (deliveryId: string, otp: string): Promise<{ delivery_id: string; expires_at: string } | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('set_delivery_otp', { p_delivery_id: deliveryId, p_otp: otp });
+    if (error) throw error;
+    return (data as { delivery_id: string; expires_at: string }) || null;
+  },
+
+  verifyDeliveryOtp: async (deliveryId: string, otp: string): Promise<Delivery | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('verify_delivery_otp', { p_delivery_id: deliveryId, p_otp: otp });
+    if (error) throw error;
+    return (data as Delivery) || null;
+  },
+
+  submitDeliveryPhoto: async (deliveryId: string, photoPath: string): Promise<Delivery | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('submit_delivery_photo', { p_delivery_id: deliveryId, p_photo_url: photoPath });
+    if (error) throw error;
+    return (data as Delivery) || null;
+  },
 };
 
 // Transaction management
