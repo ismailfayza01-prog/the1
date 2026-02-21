@@ -514,18 +514,22 @@ export default function BusinessDashboardPage() {
                 const countdown = getDispatchCountdown(d.created_at);
                 const isOffered = d.status === 'offered';
                 const isPending = d.status === 'pending';
+                const isAccepted = d.status === 'accepted';
                 const canDispatch = isPending;
+                const showCountdown = isPending || isOffered;
                 return (
                   <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-xs border rounded-full px-2 py-0.5 ${statusColor[d.status]}`}>{d.status}</span>
-                        {d.rider_name && (
-                          <span className="text-xs text-muted-foreground">{d.rider_name}</span>
+                        {isAccepted && d.rider_name && (
+                          <span className="text-xs text-muted-foreground">Assigned: {d.rider_name}</span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{d.pickup_address}</p>
-                      <p className="text-[11px] text-muted-foreground">Timeout: {countdown}s</p>
+                      {showCountdown && (
+                        <p className="text-[11px] text-muted-foreground">Timeout: {countdown}s</p>
+                      )}
                     </div>
                     <Button
                       size="sm"

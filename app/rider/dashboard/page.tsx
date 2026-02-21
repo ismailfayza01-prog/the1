@@ -401,6 +401,7 @@ export default function RiderDashboardPage() {
             </div>
             {offers.filter(o => o.status === 'offered').slice(0, 3).map((offer) => {
               const remaining = Math.max(0, Math.ceil((new Date(offer.offered_at).getTime() + 20000 - nowTs) / 1000));
+              const isExpired = remaining === 0;
               const delivery = pendingDeliveries.find(d => d.id === offer.delivery_id);
 
               return (
@@ -435,19 +436,23 @@ export default function RiderDashboardPage() {
                       <p className="text-sm text-muted-foreground">Offer received</p>
                     )}
 
-                    <div className="text-xs text-muted-foreground">Expires in {remaining}s</div>
+                    <div className="text-xs text-muted-foreground">
+                      {isExpired ? 'Offer expired' : `Expires in ${remaining}s`}
+                    </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <Button
                         className="w-full h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold"
                         onClick={() => handleAcceptDelivery(offer.id)}
+                        disabled={isExpired}
                       >
-                        Accept
+                        {isExpired ? 'Expired' : 'Accept'}
                       </Button>
                       <Button
                         className="w-full h-10 rounded-xl"
                         variant="outline"
                         onClick={() => handleRejectOffer(offer.id)}
+                        disabled={isExpired}
                       >
                         Reject
                       </Button>
