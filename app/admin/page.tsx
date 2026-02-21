@@ -11,8 +11,9 @@ import Link from 'next/link';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@the1000.ma');
-  const [password, setPassword] = useState('Admin1234!');
+  const isDev = process.env.NODE_ENV !== 'production';
+  const [email, setEmail] = useState(isDev ? 'admin@the1000.ma' : '');
+  const [password, setPassword] = useState(isDev ? 'Admin1234!' : '');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -149,10 +150,12 @@ export default function AdminLoginPage() {
             </form>
           </div>
 
-          <div className="mt-6 rounded-xl bg-violet-50 border border-violet-100 p-4 text-sm">
-            <p className="font-semibold text-violet-700 mb-1">Demo Credentials</p>
-            <p className="text-violet-600/80">admin@the1000.ma / Admin1234!</p>
-          </div>
+          {isDev && (
+            <div className="mt-6 rounded-xl bg-violet-50 border border-violet-100 p-4 text-sm">
+              <p className="font-semibold text-violet-700 mb-1">Demo Credentials</p>
+              <p className="text-violet-600/80">admin@the1000.ma / Admin1234!</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

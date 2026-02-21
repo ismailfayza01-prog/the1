@@ -11,8 +11,9 @@ import Link from 'next/link';
 
 export default function RiderLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('rider1@the1000.ma');
-  const [password, setPassword] = useState('Rider1234!');
+  const isDev = process.env.NODE_ENV !== 'production';
+  const [email, setEmail] = useState(isDev ? 'rider1@the1000.ma' : '');
+  const [password, setPassword] = useState(isDev ? 'Rider1234!' : '');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -171,11 +172,13 @@ export default function RiderLoginPage() {
             </form>
           </div>
 
-          <div className="mt-6 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm">
-            <p className="font-semibold text-emerald-700 mb-1">Demo Credentials</p>
-            <p className="text-emerald-600/80">rider1@the1000.ma / Rider1234!</p>
-            <p className="text-emerald-500/60 text-xs mt-1">or rider2@the1000.ma / Rider1234!</p>
-          </div>
+          {isDev && (
+            <div className="mt-6 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm">
+              <p className="font-semibold text-emerald-700 mb-1">Demo Credentials</p>
+              <p className="text-emerald-600/80">rider1@the1000.ma / Rider1234!</p>
+              <p className="text-emerald-500/60 text-xs mt-1">or rider2@the1000.ma / Rider1234!</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

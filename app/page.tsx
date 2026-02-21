@@ -1,11 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { MapPin, Users, BarChart3, ArrowRight, Zap, Shield, TrendingUp, Globe } from 'lucide-react';
+import { MapPin, Users, BarChart3, ArrowRight, Zap, Shield, TrendingUp, Globe, Eye, EyeOff, Copy, Check } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
+  const isDev = process.env.NODE_ENV !== 'production';
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const apps = [
     {
@@ -170,34 +174,103 @@ export default function HomePage() {
         </div>
 
         {/* Demo Credentials */}
-        <div className="mt-16 rounded-2xl border border-border bg-white p-8 shadow-sm">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="rounded-xl bg-amber-50 p-2.5">
-              <Zap className="h-5 w-5 text-amber-500" />
+        {isDev && (
+          <div className="mt-16 rounded-2xl border border-border bg-white p-8 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-amber-50 p-2.5">
+                  <Zap className="h-5 w-5 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">Demo Credentials</h3>
+                  <p className="text-sm text-muted-foreground">Use these to explore all three portals</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCredentials(!showCredentials)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-semibold text-sm"
+              >
+                {showCredentials ? (
+                  <>
+                    <EyeOff className="h-4 w-4" />
+                    Hide
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4" />
+                    Show
+                  </>
+                )}
+              </button>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-foreground">Demo Credentials</h3>
-              <p className="text-sm text-muted-foreground">Use these to explore all three portals</p>
-            </div>
+
+            {showCredentials ? (
+              <div className="grid gap-4 md:grid-cols-3">
+                {[
+                  { label: 'Admin', email: 'admin@the1000.ma', password: 'Admin1234!', color: 'violet' },
+                  { label: 'Business', email: 'pharmacie@example.ma', password: 'Business1234!', color: 'sky' },
+                  { label: 'Rider', email: 'rider1@the1000.ma', password: 'Rider1234!', color: 'emerald' },
+                ].map((cred, idx) => (
+                  <div key={idx} className={`rounded-xl bg-${cred.color}-50 border border-${cred.color}-100 p-4`}>
+                    <p className={`text-xs font-bold uppercase tracking-wider text-${cred.color}-500 mb-3`}>{cred.label}</p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Email</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <code className="text-xs font-mono text-foreground bg-white rounded px-2 py-1 flex-1">{cred.email}</code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(cred.email);
+                              setCopiedIndex(idx * 2);
+                              setTimeout(() => setCopiedIndex(null), 2000);
+                            }}
+                            className="p-1 hover:bg-white/50 rounded transition-colors"
+                            title="Copy email"
+                          >
+                            {copiedIndex === idx * 2 ? (
+                              <Check className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <Copy className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Password</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <code className="text-xs font-mono text-foreground bg-white rounded px-2 py-1 flex-1">{cred.password}</code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(cred.password);
+                              setCopiedIndex(idx * 2 + 1);
+                              setTimeout(() => setCopiedIndex(null), 2000);
+                            }}
+                            className="p-1 hover:bg-white/50 rounded transition-colors"
+                            title="Copy password"
+                          >
+                            {copiedIndex === idx * 2 + 1 ? (
+                              <Check className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <Copy className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-6 text-center">
+                <p className="text-sm text-amber-900 mb-3">Demo credentials are hidden</p>
+                <p className="text-xs text-amber-700 mb-4">Click "Show" above to reveal test accounts for each portal</p>
+                <p className="text-xs text-amber-600">Note: These accounts will be reset regularly for security</p>
+              </div>
+            )}
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl bg-violet-50 border border-violet-100 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-violet-500 mb-2">Admin</p>
-              <p className="text-sm text-foreground font-medium">admin@the1000.ma</p>
-              <p className="text-sm text-muted-foreground">Admin1234!</p>
-            </div>
-            <div className="rounded-xl bg-sky-50 border border-sky-100 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-sky-500 mb-2">Business</p>
-              <p className="text-sm text-foreground font-medium">pharmacie@example.ma</p>
-              <p className="text-sm text-muted-foreground">Business1234!</p>
-            </div>
-            <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-2">Rider</p>
-              <p className="text-sm text-foreground font-medium">rider1@the1000.ma</p>
-              <p className="text-sm text-muted-foreground">Rider1234!</p>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Footer */}

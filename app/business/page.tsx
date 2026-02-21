@@ -11,8 +11,9 @@ import Link from 'next/link';
 
 export default function BusinessLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('pharmacie@example.ma');
-  const [password, setPassword] = useState('Business1234!');
+  const isDev = process.env.NODE_ENV !== 'production';
+  const [email, setEmail] = useState(isDev ? 'pharmacie@example.ma' : '');
+  const [password, setPassword] = useState(isDev ? 'Business1234!' : '');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -152,11 +153,13 @@ export default function BusinessLoginPage() {
             </form>
           </div>
 
-          <div className="mt-6 rounded-xl bg-sky-50 border border-sky-100 p-4 text-sm">
-            <p className="font-semibold text-sky-700 mb-1">Demo Credentials</p>
-            <p className="text-sky-600/80">pharmacie@example.ma / Business1234!</p>
-            <p className="text-sky-500/60 text-xs mt-1">or cafe@example.ma / Business1234!</p>
-          </div>
+          {isDev && (
+            <div className="mt-6 rounded-xl bg-sky-50 border border-sky-100 p-4 text-sm">
+              <p className="font-semibold text-sky-700 mb-1">Demo Credentials</p>
+              <p className="text-sky-600/80">pharmacie@example.ma / Business1234!</p>
+              <p className="text-sky-500/60 text-xs mt-1">or cafe@example.ma / Business1234!</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
