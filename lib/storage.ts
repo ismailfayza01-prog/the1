@@ -307,6 +307,16 @@ export const deliveryService = {
     await riderService.updateStatus(riderId, 'busy');
     return true;
   },
+
+  acceptDelivery: async (deliveryId: string, riderId: string): Promise<Delivery | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('accept_delivery', { p_delivery_id: deliveryId, p_rider_id: riderId });
+    if (error) throw error;
+    if (!data) return null;
+
+    const enriched = await deliveryService.getById(deliveryId);
+    return enriched || null;
+  },
 };
 
 // Transaction management

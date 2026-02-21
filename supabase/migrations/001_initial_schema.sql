@@ -251,6 +251,50 @@ create trigger validate_delivery_status_transition
   before update on public.deliveries
   for each row execute procedure public.validate_delivery_status_transition();
 
+-- Accept delivery (atomic rider assignment)
+create or replace function public.accept_delivery(p_delivery_id uuid, p_rider_id uuid)
+returns public.deliveries as $$
+declare
+  delivery_row public.deliveries;
+  rider_row public.riders;
+begin
+  select * into delivery_row
+  from public.deliveries
+  where id = p_delivery_id
+  for update;
+
+  if not found then
+    raise exception 'Delivery not found';
+  end if;
+
+  if delivery_row.status <> 'pending' or delivery_row.rider_id is not null then
+    raise exception 'Delivery not available';
+  end if;
+
+  select * into rider_row
+  from public.riders
+  where id = p_rider_id
+  for update;
+
+  if not found then
+    raise exception 'Rider not found';
+  end if;
+
+  update public.deliveries
+  set rider_id = p_rider_id,
+      status = 'accepted',
+      accepted_at = now()
+  where id = p_delivery_id
+  returning * into delivery_row;
+
+  update public.riders
+  set status = 'busy'
+  where id = p_rider_id;
+
+  return delivery_row;
+end;
+$$ language plpgsql security definer;
+
 -- TRANSACTIONS policies
 create policy "Users can read own transactions"
   on public.transactions for select

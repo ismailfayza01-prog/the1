@@ -111,11 +111,7 @@ export default function RiderDashboardPage() {
 
   const handleAcceptDelivery = async (deliveryId: string) => {
     if (!rider) return;
-    await deliveryService.update(deliveryId, {
-      status: 'accepted',
-      accepted_at: new Date().toISOString(),
-    });
-    await riderService.updateStatus(rider.id, 'busy');
+    await deliveryService.acceptDelivery(deliveryId, rider.id);
     setDeliveries(await deliveryService.getByRiderId(rider.id));
     const updatedRider = await riderService.getById(rider.id);
     if (updatedRider) setRider(updatedRider);
