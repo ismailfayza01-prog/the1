@@ -42,6 +42,9 @@ export interface Rider {
     lat: number;
     lng: number;
   } | null;
+  last_lat?: number | null;
+  last_lng?: number | null;
+  last_seen_at?: string | null;
   last_location_update: string | null;
   earnings_this_month: number;
   created_at: string;

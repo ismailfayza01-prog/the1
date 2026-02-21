@@ -35,6 +35,15 @@ function seedLocation(id: string): { lat: number; lng: number } {
   return { lat, lng };
 }
 
+function getRiderLocation(rider: Rider): { lat: number; lng: number } {
+  if (typeof rider.last_lat === 'number' && typeof rider.last_lng === 'number') {
+    return { lat: rider.last_lat, lng: rider.last_lng };
+  }
+  const fromJson = (rider.current_location as { lat: number; lng: number } | null);
+  if (fromJson) return fromJson;
+  return seedLocation(rider.id);
+}
+
 interface BusinessMapProps {
   riders: Rider[];
   selectedRiderId: string | null;
@@ -46,7 +55,7 @@ function BusinessMap({ riders, selectedRiderId, onSelectRider }: BusinessMapProp
   const animRef = useRef<number>(0);
   const posRef = useRef(
     riders.map(r => {
-      const base = (r.current_location as { lat: number; lng: number } | null) ?? seedLocation(r.id);
+      const base = getRiderLocation(r);
       return { ...r, lat: base.lat, lng: base.lng, vx: (Math.random() - 0.5) * 0.00015, vy: (Math.random() - 0.5) * 0.00015 };
     })
   );
@@ -55,7 +64,7 @@ function BusinessMap({ riders, selectedRiderId, onSelectRider }: BusinessMapProp
     const existing = new Map(posRef.current.map(r => [r.id, r]));
     posRef.current = riders.map(r => {
       if (existing.has(r.id)) return { ...existing.get(r.id)!, ...r };
-      const base = (r.current_location as { lat: number; lng: number } | null) ?? seedLocation(r.id);
+      const base = getRiderLocation(r);
       return { ...r, lat: base.lat, lng: base.lng, vx: (Math.random() - 0.5) * 0.00015, vy: (Math.random() - 0.5) * 0.00015 };
     });
   }, [riders]);

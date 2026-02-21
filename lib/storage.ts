@@ -180,6 +180,9 @@ export const riderService = {
     await riderService.update(id, {
       current_location: location,
       last_location_update: new Date().toISOString(),
+      last_lat: location.lat,
+      last_lng: location.lng,
+      last_seen_at: new Date().toISOString(),
     });
   },
 

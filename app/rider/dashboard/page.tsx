@@ -59,6 +59,7 @@ export default function RiderDashboardPage() {
       }
 
       // Location update interval (active GPS simulation)
+      // Throttle to ~5s to balance realtime accuracy vs. battery/network use
       locationInterval = setInterval(async () => {
         if (!riderId) return;
         const r = await riderService.getByUserId(userId!);
@@ -67,7 +68,7 @@ export default function RiderDashboardPage() {
           const newLng = -5.8340 + (Math.random() - 0.5) * 0.02;
           await riderService.updateLocation(r.id, { lat: newLat, lng: newLng });
         }
-      }, 10000);
+      }, 5000);
 
       // Realtime subscriptions
       channel = supabase.channel('rider-dashboard')
