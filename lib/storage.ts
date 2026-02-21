@@ -1,6 +1,6 @@
 // Supabase service layer for The 1000 platform
 import { createClient } from './supabase/client';
-import type { User, Business, Rider, Delivery, Transaction } from './types';
+import type { User, Business, Rider, Delivery, Transaction, DeliveryOffer } from './types';
 import { getSubscriptionDetails } from './types';
 
 function getSupabase() {
@@ -252,7 +252,7 @@ export const deliveryService = {
     const { data } = await getSupabase()
       .from('deliveries')
       .select('*, businesses(name), riders(name)')
-      .in('status', ['pending', 'accepted', 'picked_up', 'in_transit']);
+      .in('status', ['pending', 'offered', 'accepted', 'picked_up', 'in_transit']);
       
     return (data || []).map((d: any) => ({
       ...d,
@@ -319,6 +319,34 @@ export const deliveryService = {
 
     const enriched = await deliveryService.getById(deliveryId);
     return enriched || null;
+  },
+
+  dispatchDelivery: async (deliveryId: string, preferredRiderUserId?: string | null): Promise<DeliveryOffer[]> => {
+    const { data, error } = await getSupabase()
+      .rpc('dispatch_delivery', { p_delivery_id: deliveryId, p_preferred_rider_user_id: preferredRiderUserId ?? null });
+    if (error) throw error;
+    return (data as DeliveryOffer[]) || [];
+  },
+
+  getMyOffers: async (): Promise<DeliveryOffer[]> => {
+    const { data } = await getSupabase()
+      .from('delivery_offers')
+      .select('*')
+      .order('offered_at', { ascending: false });
+    return (data as DeliveryOffer[]) || [];
+  },
+
+  acceptOffer: async (offerId: string): Promise<Delivery | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('rider_accept_offer', { p_offer_id: offerId });
+    if (error) throw error;
+    return (data as Delivery) || null;
+  },
+
+  refuseOffer: async (offerId: string): Promise<void> => {
+    const { error } = await getSupabase()
+      .rpc('rider_refuse_offer', { p_offer_id: offerId });
+    if (error) throw error;
   },
 };
 

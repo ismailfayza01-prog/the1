@@ -23,7 +23,7 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
-import type { User, Rider, Delivery } from '@/lib/types';
+import type { User, Rider, Delivery, DeliveryOffer } from '@/lib/types';
 import Link from 'next/link';
 
 export default function RiderDashboardPage() {
@@ -32,7 +32,9 @@ export default function RiderDashboardPage() {
   const [rider, setRider] = useState<Rider | null>(null);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [pendingDeliveries, setPendingDeliveries] = useState<Delivery[]>([]);
+  const [offers, setOffers] = useState<DeliveryOffer[]>([]);
   const [isOnline, setIsOnline] = useState(false);
+  const [nowTs, setNowTs] = useState(Date.now());
 
   useEffect(() => {
     const supabase = createClient();
@@ -56,6 +58,7 @@ export default function RiderDashboardPage() {
         setIsOnline(riderData.status !== 'offline');
         setDeliveries(await deliveryService.getByRiderId(riderData.id));
         setPendingDeliveries((await deliveryService.getActive()).filter(d => d.status === 'pending' && !d.rider_id));
+        setOffers(await deliveryService.getMyOffers());
       }
 
       // Location update interval (active GPS simulation)
@@ -85,6 +88,9 @@ export default function RiderDashboardPage() {
             setPendingDeliveries((await deliveryService.getActive()).filter(d => d.status === 'pending' && !d.rider_id));
           }
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_offers' }, async () => {
+          setOffers(await deliveryService.getMyOffers());
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, async () => {
           if (userId) {
             const r = await riderService.getByUserId(userId);
@@ -100,6 +106,11 @@ export default function RiderDashboardPage() {
       if (channel) supabase.removeChannel(channel);
     };
   }, [router]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const handleLogout = async () => {
     if (rider) {
@@ -117,12 +128,26 @@ export default function RiderDashboardPage() {
     if (updatedRider) setRider(updatedRider);
   };
 
-  const handleAcceptDelivery = async (deliveryId: string) => {
+  const handleAcceptDelivery = async (offerId: string) => {
     if (!rider) return;
-    await deliveryService.acceptDelivery(deliveryId, rider.id);
-    setDeliveries(await deliveryService.getByRiderId(rider.id));
-    const updatedRider = await riderService.getById(rider.id);
-    if (updatedRider) setRider(updatedRider);
+    try {
+      await deliveryService.acceptOffer(offerId);
+      setDeliveries(await deliveryService.getByRiderId(rider.id));
+      setOffers(await deliveryService.getMyOffers());
+      const updatedRider = await riderService.getById(rider.id);
+      if (updatedRider) setRider(updatedRider);
+    } catch (err) {
+      console.error('Accept offer error', err);
+    }
+  };
+
+  const handleRejectOffer = async (offerId: string) => {
+    try {
+      await deliveryService.refuseOffer(offerId);
+      setOffers(await deliveryService.getMyOffers());
+    } catch (err) {
+      console.error('Reject offer error', err);
+    }
   };
 
   const handleMarkPickedUp = async (deliveryId: string) => {
@@ -364,60 +389,84 @@ export default function RiderDashboardPage() {
           </Card>
         )}
 
-        {/* Available Deliveries */}
-        {isOnline && !activeDelivery && pendingDeliveries.length > 0 && (
+        {/* Available Offers */}
+        {isOnline && !activeDelivery && offers.filter(o => o.status === 'offered').length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-amber-500" />
-              <h2 className="text-base font-bold text-foreground">Available Deliveries</h2>
-              <Badge className="bg-amber-100 text-amber-700 border-amber-200 border text-xs">{pendingDeliveries.length}</Badge>
+              <h2 className="text-base font-bold text-foreground">Delivery Offers</h2>
+              <Badge className="bg-amber-100 text-amber-700 border-amber-200 border text-xs">
+                {offers.filter(o => o.status === 'offered').length}
+              </Badge>
             </div>
-            {pendingDeliveries.slice(0, 3).map((delivery) => (
-              <Card key={delivery.id} className="border border-border bg-white shadow-sm">
-                <CardContent className="pt-5 space-y-3">
-                  <div className="space-y-2.5">
-                    <div className="flex items-start gap-2.5">
-                      <div className="mt-1 h-2 w-2 rounded-full bg-slate-400 flex-shrink-0" />
-                      <p className="text-sm text-muted-foreground">{delivery.pickup_address}</p>
-                    </div>
-                    <div className="ml-[3px] h-4 border-l-2 border-dashed border-slate-200" />
-                    <div className="flex items-start gap-2.5">
-                      <MapPin className="h-4 w-4 mt-0.5 text-emerald-500 flex-shrink-0" />
-                      <p className="text-sm text-muted-foreground">{delivery.dropoff_address}</p>
-                    </div>
-                  </div>
+            {offers.filter(o => o.status === 'offered').slice(0, 3).map((offer) => {
+              const remaining = Math.max(0, Math.ceil((new Date(offer.offered_at).getTime() + 20000 - nowTs) / 1000));
+              const delivery = pendingDeliveries.find(d => d.id === offer.delivery_id);
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-2.5 text-center">
-                      <p className="text-xs text-muted-foreground">You earn</p>
-                      <p className="text-base font-bold text-emerald-600">{currentTier} MAD</p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5 text-center">
-                      <p className="text-xs text-muted-foreground">Est. time</p>
-                      <p className="text-base font-bold text-foreground">~{delivery.estimated_duration} min</p>
-                    </div>
-                  </div>
+              return (
+                <Card key={offer.id} className="border border-border bg-white shadow-sm">
+                  <CardContent className="pt-5 space-y-3">
+                    {delivery ? (
+                      <>
+                        <div className="space-y-2.5">
+                          <div className="flex items-start gap-2.5">
+                            <div className="mt-1 h-2 w-2 rounded-full bg-slate-400 flex-shrink-0" />
+                            <p className="text-sm text-muted-foreground">{delivery.pickup_address}</p>
+                          </div>
+                          <div className="ml-[3px] h-4 border-l-2 border-dashed border-slate-200" />
+                          <div className="flex items-start gap-2.5">
+                            <MapPin className="h-4 w-4 mt-0.5 text-emerald-500 flex-shrink-0" />
+                            <p className="text-sm text-muted-foreground">{delivery.dropoff_address}</p>
+                          </div>
+                        </div>
 
-                  <Button
-                    className="w-full h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold"
-                    onClick={() => handleAcceptDelivery(delivery.id)}
-                  >
-                    Accept Delivery
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-2.5 text-center">
+                            <p className="text-xs text-muted-foreground">You earn</p>
+                            <p className="text-base font-bold text-emerald-600">{currentTier} MAD</p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5 text-center">
+                            <p className="text-xs text-muted-foreground">Est. time</p>
+                            <p className="text-base font-bold text-foreground">~{delivery.estimated_duration} min</p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Offer received</p>
+                    )}
+
+                    <div className="text-xs text-muted-foreground">Expires in {remaining}s</div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        className="w-full h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold"
+                        onClick={() => handleAcceptDelivery(offer.id)}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        className="w-full h-10 rounded-xl"
+                        variant="outline"
+                        onClick={() => handleRejectOffer(offer.id)}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
         {/* Empty State */}
-        {isOnline && !activeDelivery && pendingDeliveries.length === 0 && (
+        {isOnline && !activeDelivery && offers.filter(o => o.status === 'offered').length === 0 && (
           <Card className="border border-border bg-white shadow-sm">
             <CardContent className="py-14 text-center">
               <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-4">
                 <Package className="h-7 w-7 text-emerald-400" />
               </div>
-              <p className="font-bold text-foreground">No deliveries available</p>
+              <p className="font-bold text-foreground">No offers available</p>
               <p className="text-sm text-muted-foreground mt-1">New requests will appear here</p>
             </CardContent>
           </Card>

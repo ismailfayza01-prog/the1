@@ -4,7 +4,7 @@ export type UserRole = 'admin' | 'business' | 'rider';
 
 export type RiderStatus = 'available' | 'busy' | 'offline';
 
-export type DeliveryStatus = 'pending' | 'accepted' | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled';
+export type DeliveryStatus = 'pending' | 'offered' | 'accepted' | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled' | 'expired';
 
 export type SubscriptionTier = 'monthly' | 'annual' | 'none';
 
@@ -83,6 +83,15 @@ export interface Transaction {
   status: 'pending' | 'completed' | 'failed';
   description: string;
   created_at: string;
+}
+
+export interface DeliveryOffer {
+  id: string;
+  delivery_id: string;
+  rider_user_id: string;
+  status: 'offered' | 'accepted' | 'rejected' | 'expired';
+  offered_at: string;
+  responded_at: string | null;
 }
 
 export interface RiderLocation {

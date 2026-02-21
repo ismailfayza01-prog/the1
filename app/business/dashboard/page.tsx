@@ -224,6 +224,8 @@ export default function BusinessDashboardPage() {
   const [addingCredits, setAddingCredits] = useState(false);
   const [topUpError, setTopUpError] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [dispatchingDeliveryId, setDispatchingDeliveryId] = useState<string | null>(null);
+  const [nowTs, setNowTs] = useState(Date.now());
 
   useEffect(() => {
     const supabase = createClient();
@@ -243,6 +245,11 @@ export default function BusinessDashboardPage() {
     init();
     return () => { if (channel) supabase.removeChannel(channel); };
   }, [router]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const loadData = async (userId: string) => {
     const biz = await businessService.getByUserId(userId);
@@ -289,10 +296,23 @@ export default function BusinessDashboardPage() {
       setPickupAddress('');
       setDropoffAddress('');
       setSelectedRiderId(null);
-      setSuccessMsg('Livraison créée. En attente d\'acceptation.');
+      setSuccessMsg('Livraison créée. Prête pour dispatch.');
       setTimeout(() => setSuccessMsg(''), 4000);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDispatchDelivery = async (deliveryId: string, preferredRiderUserId?: string | null) => {
+    setDispatchingDeliveryId(deliveryId);
+    try {
+      await deliveryService.dispatchDelivery(deliveryId, preferredRiderUserId ?? null);
+    } catch (err) {
+      console.error('Dispatch error', err);
+      setSuccessMsg('Aucun rider disponible');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } finally {
+      setDispatchingDeliveryId(null);
     }
   };
 
@@ -353,16 +373,25 @@ export default function BusinessDashboardPage() {
 
   if (!currentUser || !business) return <LoadingSkeleton />;
 
-  const activeDeliveries = deliveries.filter(d => ['pending', 'accepted', 'picked_up', 'in_transit'].includes(d.status));
+  const activeDeliveries = deliveries.filter(d => ['pending', 'offered', 'accepted', 'picked_up', 'in_transit'].includes(d.status));
   const completedDeliveries = deliveries.filter(d => d.status === 'delivered');
   const ridesRemaining = business.rides_total - business.rides_used;
+  const recentDeliveries = deliveries.slice(0, 5);
+
+  const getDispatchCountdown = (createdAt: string) => {
+    const remainingMs = 90000 - (nowTs - new Date(createdAt).getTime());
+    return Math.max(0, Math.ceil(remainingMs / 1000));
+  };
 
   const statusColor: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    offered: 'bg-amber-100 text-amber-700 border-amber-200',
     accepted: 'bg-sky-100 text-sky-700 border-sky-200',
     picked_up: 'bg-violet-100 text-violet-700 border-violet-200',
     in_transit: 'bg-cyan-100 text-cyan-700 border-cyan-200',
     delivered: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    expired: 'bg-slate-100 text-slate-500 border-slate-200',
+    cancelled: 'bg-slate-100 text-slate-500 border-slate-200',
   };
 
   return (
@@ -474,6 +503,43 @@ export default function BusinessDashboardPage() {
               </div>
             </div>
           )}
+
+          {/* Dispatch List */}
+          <div className="flex-shrink-0 bg-white border border-border shadow-sm rounded-xl p-4">
+            <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3">
+              Dispatch ({recentDeliveries.length})
+            </div>
+            <div className="space-y-3">
+              {recentDeliveries.map(d => {
+                const countdown = getDispatchCountdown(d.created_at);
+                const isOffered = d.status === 'offered';
+                const isPending = d.status === 'pending';
+                const canDispatch = isPending;
+                return (
+                  <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs border rounded-full px-2 py-0.5 ${statusColor[d.status]}`}>{d.status}</span>
+                        {d.rider_name && (
+                          <span className="text-xs text-muted-foreground">{d.rider_name}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{d.pickup_address}</p>
+                      <p className="text-[11px] text-muted-foreground">Timeout: {countdown}s</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!canDispatch || dispatchingDeliveryId === d.id || isOffered}
+                      onClick={() => handleDispatchDelivery(d.id, selectedRider?.user_id ?? null)}
+                    >
+                      {isOffered ? 'Searching…' : 'Dispatch'}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* RIGHT: Sidebar with Tabs (hidden on mobile) */}
