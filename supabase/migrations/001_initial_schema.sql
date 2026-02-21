@@ -218,6 +218,39 @@ create policy "Admins can read all deliveries"
   on public.deliveries for select
   using (public.get_user_role() = 'admin');
 
+-- Enforce delivery status transitions
+create or replace function public.validate_delivery_status_transition()
+returns trigger as $$
+begin
+  if tg_op <> 'UPDATE' then
+    return new;
+  end if;
+
+  if old.status = new.status then
+    return new;
+  end if;
+
+  if old.status = 'pending' and new.status in ('accepted', 'cancelled') then
+    return new;
+  end if;
+  if old.status = 'accepted' and new.status in ('picked_up', 'cancelled') then
+    return new;
+  end if;
+  if old.status = 'picked_up' and new.status in ('in_transit', 'cancelled') then
+    return new;
+  end if;
+  if old.status = 'in_transit' and new.status in ('delivered', 'cancelled') then
+    return new;
+  end if;
+
+  raise exception 'Invalid delivery status transition from % to %', old.status, new.status;
+end;
+$$ language plpgsql;
+
+create trigger validate_delivery_status_transition
+  before update on public.deliveries
+  for each row execute procedure public.validate_delivery_status_transition();
+
 -- TRANSACTIONS policies
 create policy "Users can read own transactions"
   on public.transactions for select
