@@ -6,13 +6,13 @@ export async function middleware(request: NextRequest) {
 
   // Define protected routes and their required roles
   const protectedRoutes = [
-    { prefix: '/admin/dashboard', role: 'admin', loginPath: '/admin' },
-    { prefix: '/business/dashboard', role: 'business', loginPath: '/business' },
-    { prefix: '/rider/dashboard', role: 'rider', loginPath: '/rider' },
+    { prefix: '/admin', role: 'admin', loginPath: '/admin' },
+    { prefix: '/business', role: 'business', loginPath: '/business' },
+    { prefix: '/rider', role: 'rider', loginPath: '/rider' },
   ];
 
-  // Check if current path is a protected route
-  const routeMatch = protectedRoutes.find(route => path.startsWith(route.prefix));
+  // Check if current path is a protected route (exclude portal login roots)
+  const routeMatch = protectedRoutes.find(route => path.startsWith(route.prefix) && path !== route.prefix);
 
   if (!routeMatch) {
     return NextResponse.next({ request });
