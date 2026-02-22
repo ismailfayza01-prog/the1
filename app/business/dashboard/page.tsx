@@ -1,32 +1,24 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { createClient } from '@/lib/supabase/client';
-import { userService, businessService, deliveryService, riderService, transactionService } from '@/lib/storage';
+import { userService, businessService, deliveryService, riderService } from '@/lib/storage';
+import 'leaflet/dist/leaflet.css';
 import {
-  MapPin, Package, CreditCard, LogOut, Plus, CheckCircle2,
-  Home, Wallet, Navigation, X, ArrowRight, Bike,
-  Receipt, AlertCircle, TrendingUp, DollarSign,
+  MapPin, Package, CreditCard, LogOut,
+  Home, Wallet, X, Bike, Receipt, AlertCircle, CheckCircle2,
 } from 'lucide-react';
-import type { User, Business, Delivery, Rider, Transaction } from '@/lib/types';
+import type { User, Business, Delivery, Rider } from '@/lib/types';
 import Link from 'next/link';
 
 // Tangier bounding box
 const MAP_BOUNDS = { latMin: 35.74, latMax: 35.79, lngMin: -5.86, lngMax: -5.80 };
 const BIZ_LOCATION = { lat: 35.7595, lng: -5.8340 };
-
-function toCanvas(lat: number, lng: number, W: number, H: number) {
-  const x = ((lng - MAP_BOUNDS.lngMin) / (MAP_BOUNDS.lngMax - MAP_BOUNDS.lngMin)) * W;
-  const y = ((MAP_BOUNDS.latMax - lat) / (MAP_BOUNDS.latMax - MAP_BOUNDS.latMin)) * H;
-  return { x, y };
-}
 
 function seedLocation(id: string): { lat: number; lng: number } {
   let h = 0;
@@ -49,137 +41,205 @@ interface BusinessMapProps {
   riders: Rider[];
   selectedRiderId: string | null;
   onSelectRider: (id: string | null) => void;
+  pinMode?: 'pickup' | 'dropoff' | null;
+  pickupPin?: { lat: number; lng: number } | null;
+  dropoffPin?: { lat: number; lng: number } | null;
+  onMapPin?: (lat: number, lng: number) => void;
 }
 
-function BusinessMap({ riders, selectedRiderId, onSelectRider }: BusinessMapProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number>(0);
-  const posRef = useRef(
-    riders.map(r => {
-      const base = getRiderLocation(r);
-      return { ...r, lat: base.lat, lng: base.lng, vx: (Math.random() - 0.5) * 0.00015, vy: (Math.random() - 0.5) * 0.00015 };
-    })
-  );
+function BusinessMap({
+  riders,
+  selectedRiderId,
+  onSelectRider,
+  pinMode = null,
+  pickupPin = null,
+  dropoffPin = null,
+  onMapPin,
+}: BusinessMapProps) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+  const leafletRef = useRef<any>(null);
+  const ridersLayerRef = useRef<any>(null);
+  const pinsLayerRef = useRef<any>(null);
+  const routeLineRef = useRef<any>(null);
+  const didFitBoundsRef = useRef(false);
 
   useEffect(() => {
-    const existing = new Map(posRef.current.map(r => [r.id, r]));
-    posRef.current = riders.map(r => {
-      if (existing.has(r.id)) return { ...existing.get(r.id)!, ...r };
-      const base = getRiderLocation(r);
-      return { ...r, lat: base.lat, lng: base.lng, vx: (Math.random() - 0.5) * 0.00015, vy: (Math.random() - 0.5) * 0.00015 };
-    });
-  }, [riders]);
+    let mounted = true;
+
+    const initMap = async () => {
+      if (!mapContainerRef.current || mapRef.current) return;
+
+      const L = await import('leaflet');
+      if (!mounted) return;
+      leafletRef.current = L;
+
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: true,
+        attributionControl: true,
+      });
+
+      const tangierBounds = L.latLngBounds(
+        [MAP_BOUNDS.latMin, MAP_BOUNDS.lngMin],
+        [MAP_BOUNDS.latMax, MAP_BOUNDS.lngMax]
+      );
+
+      map.fitBounds(tangierBounds, { padding: [24, 24] });
+      map.setMaxBounds(tangierBounds.pad(0.1));
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map);
+
+      const businessIcon = L.divIcon({
+        className: 'business-pin',
+        html: '<div style="width:24px;height:24px;border-radius:999px;background:#0ea5e9;border:2px solid #fff;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.25)">B</div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+
+      L.marker([BIZ_LOCATION.lat, BIZ_LOCATION.lng], { icon: businessIcon })
+        .addTo(map)
+        .bindTooltip('Votre adresse', { direction: 'top', offset: [0, -12] });
+
+      ridersLayerRef.current = L.layerGroup().addTo(map);
+      pinsLayerRef.current = L.layerGroup().addTo(map);
+      routeLineRef.current = L.polyline([], {
+        color: '#10b981',
+        weight: 3,
+        dashArray: '6 6',
+      }).addTo(map);
+
+      mapRef.current = map;
+      setTimeout(() => map.invalidateSize(), 50);
+    };
+
+    void initMap();
+
+    return () => {
+      mounted = false;
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      ridersLayerRef.current = null;
+      pinsLayerRef.current = null;
+      routeLineRef.current = null;
+      leafletRef.current = null;
+      didFitBoundsRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    let frame = 0;
+    if (!mapRef.current || !leafletRef.current || !ridersLayerRef.current) return;
 
-    function draw() {
-      frame++;
-      if (!canvas) return;
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-      const W = canvas.width, H = canvas.height;
-      const ctx = canvas.getContext('2d')!;
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    const layer = ridersLayerRef.current;
+    const routeLine = routeLineRef.current;
 
-      ctx.fillStyle = '#0A0F1E';
-      ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = 'rgba(56,189,248,0.06)';
-      ctx.lineWidth = 1;
-      for (let x = 0; x < W; x += 48) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-      for (let y = 0; y < H; y += 48) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    layer.clearLayers();
 
-      ctx.strokeStyle = 'rgba(56,189,248,0.10)';
-      ctx.lineWidth = 2;
-      [[0.25, 0, 0.65, 1], [0, 0.35, 1, 0.55], [0.1, 0, 0.55, 1], [0, 0.15, 1, 0.85], [0.5, 0, 0.8, 1]].forEach(([x1, y1, x2, y2]) => {
-        ctx.beginPath(); ctx.moveTo(x1 * W, y1 * H); ctx.lineTo(x2 * W, y2 * H); ctx.stroke();
+    for (const rider of riders) {
+      const loc = getRiderLocation(rider);
+      const isSelected = rider.id === selectedRiderId;
+      const fillColor = rider.status === 'available'
+        ? '#10b981'
+        : rider.status === 'busy'
+          ? '#f59e0b'
+          : '#94a3b8';
+
+      const marker = L.circleMarker([loc.lat, loc.lng], {
+        radius: isSelected ? 9 : 7,
+        fillColor,
+        fillOpacity: 0.95,
+        color: '#ffffff',
+        weight: 2,
       });
 
-      const biz = toCanvas(BIZ_LOCATION.lat, BIZ_LOCATION.lng, W, H);
-      const bizPulse = 18 + Math.sin(frame * 0.05) * 4;
-      ctx.beginPath(); ctx.arc(biz.x, biz.y, bizPulse, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(56,189,248,${0.15 + Math.sin(frame * 0.05) * 0.08})`; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.beginPath(); ctx.arc(biz.x, biz.y, 10, 0, Math.PI * 2);
-      const bizGrad = ctx.createRadialGradient(biz.x, biz.y, 0, biz.x, biz.y, 10);
-      bizGrad.addColorStop(0, '#38BDF8'); bizGrad.addColorStop(1, '#0EA5E9');
-      ctx.fillStyle = bizGrad; ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('B', biz.x, biz.y);
-      ctx.fillStyle = 'rgba(56,189,248,0.9)'; ctx.font = '10px var(--font-dm),sans-serif'; ctx.textAlign = 'left';
-      ctx.fillText('Votre adresse', biz.x + 14, biz.y + 4);
-
-      posRef.current = posRef.current.map(r => {
-        if (r.status !== 'available') return r;
-        let { lat, lng, vx, vy } = r;
-        lat += vx; lng += vy;
-        if (lat > MAP_BOUNDS.latMax || lat < MAP_BOUNDS.latMin) vx *= -1;
-        if (lng > MAP_BOUNDS.lngMax || lng < MAP_BOUNDS.lngMin) vy *= -1;
-        return { ...r, lat, lng, vx, vy };
-      });
-
-      posRef.current.forEach(r => {
-        const { x, y } = toCanvas(r.lat, r.lng, W, H);
-        const isSelected = r.id === selectedRiderId;
-        const color = r.status === 'available' ? '#00FF88' : '#FF3B3B';
-
-        if (isSelected) {
-          ctx.beginPath(); ctx.moveTo(biz.x, biz.y); ctx.lineTo(x, y);
-          ctx.strokeStyle = 'rgba(0,255,136,0.2)'; ctx.lineWidth = 1;
-          ctx.setLineDash([6, 6]); ctx.stroke(); ctx.setLineDash([]);
-        }
-
-        if (r.status === 'available') {
-          const pulse = 14 + Math.sin(frame * 0.06 + r.id.charCodeAt(0)) * 5;
-          ctx.beginPath(); ctx.arc(x, y, pulse, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(0,255,136,${0.12 + Math.sin(frame * 0.06 + r.id.charCodeAt(0)) * 0.08})`;
-          ctx.lineWidth = 1; ctx.stroke();
-        }
-
-        if (isSelected) {
-          ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2; ctx.stroke();
-        }
-
-        ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2);
-        ctx.fillStyle = color; ctx.fill();
-
-        ctx.fillStyle = isSelected ? '#fff' : 'rgba(240,240,248,0.85)';
-        ctx.font = isSelected ? 'bold 11px var(--font-dm),sans-serif' : '11px var(--font-dm),sans-serif';
-        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        ctx.fillText(r.name.split(' ')[0], x + 13, y + 1);
-      });
-
-      ctx.fillStyle = 'rgba(56,189,248,0.25)'; ctx.font = 'bold 10px sans-serif';
-      ctx.textAlign = 'left'; ctx.fillText('TANGER', 12, H - 14);
-
-      animRef.current = requestAnimationFrame(draw);
+      marker
+        .addTo(layer)
+        .bindTooltip(`${rider.name} · ${rider.status}`, { direction: 'top', offset: [0, -8] })
+        .on('click', () => onSelectRider(isSelected ? null : rider.id));
     }
 
-    draw();
-    return () => cancelAnimationFrame(animRef.current);
-  }, [selectedRiderId]);
+    const selected = riders.find((r) => r.id === selectedRiderId);
+    if (selected && routeLine) {
+      const selectedLoc = getRiderLocation(selected);
+      const latlngs = [
+        [BIZ_LOCATION.lat, BIZ_LOCATION.lng],
+        [selectedLoc.lat, selectedLoc.lng],
+      ];
+      routeLine.setLatLngs(latlngs);
+      const routeBounds = L.latLngBounds(latlngs as [number, number][]);
+      map.fitBounds(routeBounds, { padding: [48, 48], maxZoom: 15 });
+      return;
+    }
 
-  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const W = rect.width, H = rect.height;
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const hit = posRef.current.find(r => {
-      const { x, y } = toCanvas(r.lat, r.lng, W, H);
-      return Math.hypot(x - mx, y - my) < 20;
-    });
-    onSelectRider(hit ? hit.id : null);
-  }, [onSelectRider]);
+    if (routeLine) {
+      routeLine.setLatLngs([]);
+    }
 
-  return (
-    <canvas
-      ref={canvasRef}
-      onClick={handleClick}
-      role="region"
-      aria-label="Live rider locations map for Tangier"
-      className="w-full h-full cursor-crosshair rounded-2xl"
-    />
-  );
+    if (!didFitBoundsRef.current && riders.length > 0) {
+      const allPoints: [number, number][] = riders.map((r) => {
+        const loc = getRiderLocation(r);
+        return [loc.lat, loc.lng];
+      });
+      allPoints.push([BIZ_LOCATION.lat, BIZ_LOCATION.lng]);
+      map.fitBounds(L.latLngBounds(allPoints), { padding: [48, 48], maxZoom: 14 });
+      didFitBoundsRef.current = true;
+    }
+  }, [riders, selectedRiderId, onSelectRider]);
+
+  useEffect(() => {
+    if (!mapRef.current || !leafletRef.current || !pinsLayerRef.current) return;
+
+    const L = leafletRef.current;
+    const pinsLayer = pinsLayerRef.current;
+    pinsLayer.clearLayers();
+
+    if (pickupPin) {
+      L.circleMarker([pickupPin.lat, pickupPin.lng], {
+        radius: 7,
+        fillColor: '#0ea5e9',
+        fillOpacity: 0.95,
+        color: '#ffffff',
+        weight: 2,
+      })
+        .addTo(pinsLayer)
+        .bindTooltip('Pickup pin', { direction: 'top', offset: [0, -8] });
+    }
+
+    if (dropoffPin) {
+      L.circleMarker([dropoffPin.lat, dropoffPin.lng], {
+        radius: 7,
+        fillColor: '#ef4444',
+        fillOpacity: 0.95,
+        color: '#ffffff',
+        weight: 2,
+      })
+        .addTo(pinsLayer)
+        .bindTooltip('Dropoff pin', { direction: 'top', offset: [0, -8] });
+    }
+  }, [pickupPin, dropoffPin]);
+
+  useEffect(() => {
+    if (!mapRef.current || !onMapPin) return;
+    const map = mapRef.current;
+
+    const clickHandler = (e: any) => {
+      if (!pinMode) return;
+      onMapPin(e.latlng.lat, e.latlng.lng);
+    };
+
+    map.on('click', clickHandler);
+    return () => {
+      map.off('click', clickHandler);
+    };
+  }, [onMapPin, pinMode]);
+
+  return <div ref={mapContainerRef} role="region" aria-label="Live rider locations map for Tangier" className="w-full h-full rounded-2xl" />;
 }
 
 function LoadingSkeleton() {
@@ -213,18 +273,23 @@ export default function BusinessDashboardPage() {
   const [selectedRiderId, setSelectedRiderId] = useState<string | null>(null);
   const [pickupAddress, setPickupAddress] = useState('');
   const [dropoffAddress, setDropoffAddress] = useState('');
+  const [dropoffPhone, setDropoffPhone] = useState('');
+  const [deliveryNote, setDeliveryNote] = useState('');
+  const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [dropoffCoords, setDropoffCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>('dropoff');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [allRiders, setAllRiders] = useState<Rider[]>([]);
 
   // Subscription UI state
-  const [sidebarTab, setSidebarTab] = useState<'riders' | 'subscription' | 'wallet' | 'history'>('riders');
+  const [sidebarTab, setSidebarTab] = useState<'create' | 'track' | 'subscription' | 'wallet' | 'history'>('create');
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual' | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState('');
   const [topUpAmount, setTopUpAmount] = useState('');
   const [addingCredits, setAddingCredits] = useState(false);
   const [topUpError, setTopUpError] = useState('');
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dispatchingDeliveryId, setDispatchingDeliveryId] = useState<string | null>(null);
   const [nowTs, setNowTs] = useState(Date.now());
   const [otpModalOpen, setOtpModalOpen] = useState(false);
@@ -249,8 +314,14 @@ export default function BusinessDashboardPage() {
         .subscribe();
     }
     init();
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, [router]);
+    const poller = setInterval(() => {
+      if (currentUser?.id) loadData(currentUser.id);
+    }, 8000);
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+      clearInterval(poller);
+    };
+  }, [router, currentUser?.id]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
@@ -264,29 +335,44 @@ export default function BusinessDashboardPage() {
       setDeliveries(await deliveryService.getByBusinessId(biz.id));
     }
     setAvailableRiders(await riderService.getAvailable());
-    const txns = await transactionService.getByUserId(userId);
-    setTransactions(txns);
+    setAllRiders(await riderService.getAll());
   };
 
   const handleLogout = async () => { await userService.logout(); router.push('/business'); };
-  const selectedRider = availableRiders.find(r => r.id === selectedRiderId) ?? null;
+  const selectedRider = allRiders.find(r => r.id === selectedRiderId) ?? null;
+
+  const handleMapPin = (lat: number, lng: number) => {
+    const coordLabel = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    if (pinMode === 'pickup') {
+      setPickupCoords({ lat, lng });
+      setPickupAddress(`Pinned at ${coordLabel}`);
+      return;
+    }
+    if (pinMode === 'dropoff') {
+      setDropoffCoords({ lat, lng });
+      setDropoffAddress(`Pinned at ${coordLabel}`);
+    }
+  };
 
   const handleRequestDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!business || !selectedRider) return;
+    if (!business) return;
     setSubmitting(true);
     try {
-      await deliveryService.create({
+      const preferredRiderUserId = selectedRider?.user_id ?? null;
+      const created = await deliveryService.create({
         business_id: business.id,
         business_name: business.name,
         rider_id: null,
         rider_name: null,
-        pickup_address: pickupAddress,
-        pickup_lat: BIZ_LOCATION.lat + (Math.random() - 0.5) * 0.01,
-        pickup_lng: BIZ_LOCATION.lng + (Math.random() - 0.5) * 0.01,
+        pickup_address: pickupAddress || `${business.name} (pickup)`,
+        pickup_lat: pickupCoords?.lat ?? (BIZ_LOCATION.lat + (Math.random() - 0.5) * 0.01),
+        pickup_lng: pickupCoords?.lng ?? (BIZ_LOCATION.lng + (Math.random() - 0.5) * 0.01),
         dropoff_address: dropoffAddress,
-        dropoff_lat: BIZ_LOCATION.lat + (Math.random() - 0.5) * 0.02,
-        dropoff_lng: BIZ_LOCATION.lng + (Math.random() - 0.5) * 0.02,
+        dropoff_phone: dropoffPhone,
+        note: deliveryNote || null,
+        dropoff_lat: dropoffCoords?.lat ?? (BIZ_LOCATION.lat + (Math.random() - 0.5) * 0.02),
+        dropoff_lng: dropoffCoords?.lng ?? (BIZ_LOCATION.lng + (Math.random() - 0.5) * 0.02),
         estimated_duration: 15 + Math.floor(Math.random() * 20),
         actual_duration: null,
         price: business.subscription_tier !== 'none' ? 0 : 25,
@@ -297,13 +383,30 @@ export default function BusinessDashboardPage() {
         picked_up_at: null,
         completed_at: null,
       });
+
+      if (preferredRiderUserId) {
+        try {
+          await deliveryService.dispatchDelivery(created.id, preferredRiderUserId);
+        } catch (dispatchErr) {
+          console.error('Auto-dispatch error', dispatchErr);
+        }
+      }
+
       if (business.subscription_tier !== 'none') await businessService.useRide(business.id);
       await loadData(currentUser!.id);
       setPickupAddress('');
       setDropoffAddress('');
+      setDropoffPhone('');
+      setDeliveryNote('');
+      setPickupCoords(null);
+      setDropoffCoords(null);
+      setPinMode('dropoff');
       setSelectedRiderId(null);
-      setSuccessMsg('Livraison créée. Prête pour dispatch.');
+      setSuccessMsg(preferredRiderUserId
+        ? 'Livraison créée + rider sélectionné. Suivez-la dans Track.'
+        : 'Livraison créée. Choisissez un rider puis suivez-la dans Track.');
       setTimeout(() => setSuccessMsg(''), 4000);
+      setSidebarTab('track');
     } finally {
       setSubmitting(false);
     }
@@ -405,7 +508,7 @@ export default function BusinessDashboardPage() {
         setSuccessMsg(`+${amount} MAD crédits ajoutés !`);
         await loadData(currentUser.id);
         setTimeout(() => setSuccessMsg(''), 4000);
-        setSidebarTab('history');
+        setSidebarTab('wallet');
       } else {
         setTopUpError('Erreur lors de l\'ajout des crédits');
       }
@@ -419,13 +522,22 @@ export default function BusinessDashboardPage() {
   if (!currentUser || !business) return <LoadingSkeleton />;
 
   const activeDeliveries = deliveries.filter(d => ['pending', 'offered', 'accepted', 'picked_up', 'in_transit'].includes(d.status));
-  const completedDeliveries = deliveries.filter(d => d.status === 'delivered');
+  const completedDeliveries = deliveries.filter(d => ['delivered', 'cancelled', 'expired'].includes(d.status));
+  const trackDeliveries = deliveries.filter(d => ['pending', 'offered', 'accepted', 'picked_up', 'in_transit'].includes(d.status));
   const ridesRemaining = business.rides_total - business.rides_used;
-  const recentDeliveries = deliveries.slice(0, 5);
 
   const getDispatchCountdown = (createdAt: string) => {
     const remainingMs = 90000 - (nowTs - new Date(createdAt).getTime());
     return Math.max(0, Math.ceil(remainingMs / 1000));
+  };
+
+  const formatLastSeen = (ts?: string | null) => {
+    if (!ts) return 'never';
+    const diff = Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 1000));
+    if (diff < 30) return 'just now';
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
   };
 
   const statusColor: Record<string, string> = {
@@ -530,6 +642,10 @@ export default function BusinessDashboardPage() {
               riders={availableRiders}
               selectedRiderId={selectedRiderId}
               onSelectRider={setSelectedRiderId}
+              pinMode={sidebarTab === 'create' ? pinMode : null}
+              pickupPin={pickupCoords}
+              dropoffPin={dropoffCoords}
+              onMapPin={handleMapPin}
             />
           </div>
 
@@ -541,99 +657,44 @@ export default function BusinessDashboardPage() {
               </div>
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {activeDeliveries.map(d => (
-                  <div key={d.id} className={`${statusColor[d.status]} border rounded-lg px-3 py-2 text-xs whitespace-nowrap flex-shrink-0`}>
-                    {d.status}
+                  <div key={d.id} className={`${statusColor[d.status]} border rounded-lg px-3 py-2 text-xs flex-shrink-0`}>
+                    <div className="font-semibold">{d.status}</div>
+                    <div className="text-[11px] opacity-80">
+                      {new Date(d.picked_up_at || d.accepted_at || d.created_at).toLocaleTimeString()}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Dispatch List */}
-          <div className="flex-shrink-0 bg-white border border-border shadow-sm rounded-xl p-4">
-            <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3">
-              Dispatch ({recentDeliveries.length})
-            </div>
-            <div className="space-y-3">
-              {recentDeliveries.map(d => {
-                const countdown = getDispatchCountdown(d.created_at);
-                const isOffered = d.status === 'offered';
-                const isPending = d.status === 'pending';
-                const isAccepted = d.status === 'accepted';
-                const isDelivered = d.status === 'delivered';
-                const podMethod = (d as any).pod_method as string | null | undefined;
-                const podPhoto = (d as any).pod_photo_url as string | null | undefined;
-                const canDispatch = isPending;
-                const showCountdown = isPending || isOffered;
-                const canSetOtp = ['accepted', 'picked_up', 'in_transit'].includes(d.status) && !isDelivered;
-                return (
-                  <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-xs border rounded-full px-2 py-0.5 ${statusColor[d.status]}`}>{d.status}</span>
-                        {isAccepted && d.rider_name && (
-                          <span className="text-xs text-muted-foreground">Assigned: {d.rider_name}</span>
-                        )}
-                        {isDelivered && podMethod === 'otp' && (
-                          <span className="text-xs text-emerald-600">PoD: OTP verified</span>
-                        )}
-                        {isDelivered && podMethod === 'photo' && (
-                          <span className="text-xs text-emerald-600">PoD: Photo</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{d.pickup_address}</p>
-                      {showCountdown && (
-                        <p className="text-[11px] text-muted-foreground">Timeout: {countdown}s</p>
-                      )}
-                      {isDelivered && podMethod === 'photo' && podPhoto && (
-                        <button
-                          className="text-[11px] text-sky-600 hover:text-sky-500"
-                          onClick={() => handleViewPodPhoto(d.id, podPhoto)}
-                        >
-                          View photo
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {canSetOtp && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenOtpModal(d.id)}
-                        >
-                          Set OTP
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={!canDispatch || dispatchingDeliveryId === d.id || isOffered}
-                        onClick={() => handleDispatchDelivery(d.id, selectedRider?.user_id ?? null)}
-                      >
-                        {isOffered ? 'Searching…' : 'Dispatch'}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Tracking is in dedicated Track tab */}
         </div>
 
         {/* RIGHT: Sidebar with Tabs (hidden on mobile) */}
         <div className="hidden lg:flex flex-col bg-white border-l border-border overflow-hidden">
 
           {/* Tab Navigation */}
-          <div className="flex border-b border-border flex-shrink-0">
+          <div className="flex border-b border-border flex-shrink-0 overflow-x-auto">
             <button
-              onClick={() => { setSidebarTab('riders'); setSelectedRiderId(null); }}
+              onClick={() => { setSidebarTab('create'); setSelectedRiderId(null); }}
               className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${
-                sidebarTab === 'riders'
+                sidebarTab === 'create'
                   ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              Riders
+              Create
+            </button>
+            <button
+              onClick={() => setSidebarTab('track')}
+              className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${
+                sidebarTab === 'track'
+                  ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Track
             </button>
             <button
               onClick={() => setSidebarTab('subscription')}
@@ -674,31 +735,12 @@ export default function BusinessDashboardPage() {
           <div className="flex-1 overflow-y-auto">
 
             {/* RIDERS TAB */}
-            {sidebarTab === 'riders' && (
-              <>
-                {!selectedRider ? (
-                  <div className="flex flex-col overflow-hidden h-full">
-                    <div className="p-4 border-b border-border flex-shrink-0">
-                      <div className="text-sm font-semibold text-foreground">Sélectionner un rider</div>
-                      <div className="text-xs text-muted-foreground">{availableRiders.length} disponible{availableRiders.length !== 1 ? 's' : ''}</div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto">
-                      {availableRiders.map(r => (
-                        <button
-                          key={r.id}
-                          onClick={() => setSelectedRiderId(r.id)}
-                          className="w-full px-4 py-3 border-b border-border hover:bg-sky-50 transition-colors text-left"
-                        >
-                          <div className="font-semibold text-sm text-foreground">{r.name}</div>
-                          <div className="text-xs text-muted-foreground">{r.total_deliveries} livraisons</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <form onSubmit={handleRequestDelivery} className="flex flex-col p-4 h-full overflow-y-auto">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="font-semibold text-sm text-foreground">Nouvelle livraison</div>
+            {sidebarTab === 'create' && (
+              <div className="flex h-full flex-col overflow-hidden">
+                <form onSubmit={handleRequestDelivery} className="space-y-3 border-b border-border p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-sm text-foreground">Nouvelle livraison</div>
+                    {selectedRider && (
                       <button
                         type="button"
                         onClick={() => setSelectedRiderId(null)}
@@ -706,49 +748,220 @@ export default function BusinessDashboardPage() {
                       >
                         <X size={16} />
                       </button>
+                    )}
+                  </div>
+
+                  <div className="rounded-md border border-border bg-background px-3 py-2 text-xs">
+                    {selectedRider
+                      ? `Rider préféré: ${selectedRider.name} (${selectedRider.status})`
+                      : 'Aucun rider préféré (dispatch automatique ou admin manuel).'}
+                  </div>
+
+                  <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+                    <div className="text-xs font-semibold text-foreground">Pin by map click</div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={pinMode === 'pickup' ? 'default' : 'outline'}
+                        onClick={() => setPinMode('pickup')}
+                      >
+                        Pickup pin
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={pinMode === 'dropoff' ? 'default' : 'outline'}
+                        onClick={() => setPinMode('dropoff')}
+                      >
+                        Dropoff pin
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setPickupCoords(null);
+                          setDropoffCoords(null);
+                        }}
+                      >
+                        Clear pins
+                      </Button>
                     </div>
-
-                    <div className="space-y-4 flex-1">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Rider</Label>
-                        <div className="font-semibold text-sm mt-1 text-foreground">{selectedRider.name}</div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Click on the map to place the {pinMode ?? 'dropoff'} pointer.
+                    </p>
+                    {(pickupCoords || dropoffCoords) && (
+                      <div className="text-[11px] text-muted-foreground space-y-1">
+                        {pickupCoords && <p>Pickup: {pickupCoords.lat.toFixed(5)}, {pickupCoords.lng.toFixed(5)}</p>}
+                        {dropoffCoords && <p>Dropoff: {dropoffCoords.lat.toFixed(5)}, {dropoffCoords.lng.toFixed(5)}</p>}
                       </div>
+                    )}
+                  </div>
 
-                      <div>
-                        <Label htmlFor="pickup" className="text-xs text-muted-foreground">Adresse de départ</Label>
-                        <Input
-                          id="pickup"
-                          value={pickupAddress}
-                          onChange={(e) => setPickupAddress(e.target.value)}
-                          placeholder="Enter pickup address"
-                          className="mt-1 text-sm"
-                          required
-                        />
-                      </div>
+                  <div>
+                    <Label htmlFor="pickup" className="text-xs text-muted-foreground">Adresse de départ</Label>
+                    <Input
+                      id="pickup"
+                      value={pickupAddress}
+                      onChange={(e) => setPickupAddress(e.target.value)}
+                      placeholder="Pickup address (optional)"
+                      className="mt-1 text-sm"
+                    />
+                  </div>
 
-                      <div>
-                        <Label htmlFor="dropoff" className="text-xs text-muted-foreground">Adresse de livraison</Label>
-                        <Input
-                          id="dropoff"
-                          value={dropoffAddress}
-                          onChange={(e) => setDropoffAddress(e.target.value)}
-                          placeholder="Enter dropoff address"
-                          className="mt-1 text-sm"
-                          required
-                        />
-                      </div>
-                    </div>
+                  <div>
+                    <Label htmlFor="dropoff" className="text-xs text-muted-foreground">Adresse de livraison</Label>
+                    <Input
+                      id="dropoff"
+                      value={dropoffAddress}
+                      onChange={(e) => setDropoffAddress(e.target.value)}
+                      placeholder="Enter dropoff address"
+                      className="mt-1 text-sm"
+                      required
+                    />
+                  </div>
 
-                    <Button
-                      type="submit"
-                      disabled={submitting || !pickupAddress || !dropoffAddress}
-                      className="w-full mt-4 bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold hover:from-sky-600 hover:to-cyan-600"
-                    >
-                      {submitting ? 'Assigning...' : 'Assigner Livraison'}
-                    </Button>
-                  </form>
+                  <div>
+                    <Label htmlFor="dropoff-phone" className="text-xs text-muted-foreground">Téléphone de livraison</Label>
+                    <Input
+                      id="dropoff-phone"
+                      value={dropoffPhone}
+                      onChange={(e) => setDropoffPhone(e.target.value)}
+                      placeholder="+212 6 00 00 00 00"
+                      className="mt-1 text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="note" className="text-xs text-muted-foreground">Note (optionnel)</Label>
+                    <Input
+                      id="note"
+                      value={deliveryNote}
+                      onChange={(e) => setDeliveryNote(e.target.value)}
+                      placeholder="Notes for rider"
+                      className="mt-1 text-sm"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={submitting || !dropoffAddress || !dropoffPhone}
+                    className="w-full bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold hover:from-sky-600 hover:to-cyan-600"
+                  >
+                    {submitting ? 'Creating...' : 'Créer la livraison'}
+                  </Button>
+                </form>
+
+                <div className="border-b border-border p-4">
+                  <div className="text-sm font-semibold text-foreground">Rider availability</div>
+                  <div className="text-xs text-muted-foreground">
+                    {allRiders.length} total · {availableRiders.length} online
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                  {allRiders.map((r) => {
+                    const canSelect = r.status === 'available';
+                    const isSelected = selectedRiderId === r.id;
+                    return (
+                      <button
+                        key={r.id}
+                        onClick={() => canSelect && setSelectedRiderId(isSelected ? null : r.id)}
+                        className={`w-full px-4 py-3 border-b border-border text-left transition-colors ${
+                          canSelect ? 'hover:bg-sky-50' : 'opacity-70 cursor-not-allowed'
+                        } ${isSelected ? 'bg-sky-50' : ''}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`h-2 w-2 rounded-full ${r.status === 'available' ? 'bg-emerald-500' : r.status === 'busy' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                          <div className="font-semibold text-sm text-foreground">{r.name}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{r.status} · last seen {formatLastSeen(r.last_seen_at)}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* TRACK TAB */}
+            {sidebarTab === 'track' && (
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-foreground">Tracking board</div>
+                  <div className="text-xs text-muted-foreground">{trackDeliveries.length} active</div>
+                </div>
+
+                {trackDeliveries.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-background p-4 text-xs text-muted-foreground">
+                    No active deliveries. Create one in the Create tab.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {trackDeliveries.map(d => {
+                      const countdown = getDispatchCountdown(d.created_at);
+                      const isOffered = d.status === 'offered';
+                      const isPending = d.status === 'pending';
+                      const isAccepted = d.status === 'accepted';
+                      const isDelivered = d.status === 'delivered';
+                      const podMethod = (d as any).pod_method as string | null | undefined;
+                      const podPhoto = (d as any).pod_photo_url as string | null | undefined;
+                      const canDispatch = isPending;
+                      const showCountdown = isPending || isOffered;
+                      const canSetOtp = ['accepted', 'picked_up', 'in_transit'].includes(d.status) && !isDelivered;
+
+                      return (
+                        <div key={d.id} className="rounded-lg border border-border px-3 py-3 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-xs border rounded-full px-2 py-0.5 ${statusColor[d.status]}`}>{d.status}</span>
+                            {isAccepted && d.rider_name && (
+                              <span className="text-xs text-muted-foreground">Assigned: {d.rider_name}</span>
+                            )}
+                            {isDelivered && podMethod === 'otp' && (
+                              <span className="text-xs text-emerald-600">PoD: OTP verified</span>
+                            )}
+                            {isDelivered && podMethod === 'photo' && (
+                              <span className="text-xs text-emerald-600">PoD: Photo</span>
+                            )}
+                          </div>
+
+                          <p className="text-xs text-muted-foreground truncate">{d.pickup_address}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">Dropoff: {d.dropoff_address} · {d.dropoff_phone}</p>
+                          <p className="text-[11px] text-muted-foreground">Created: {new Date(d.created_at).toLocaleString()}</p>
+                          {d.note && (
+                            <p className="text-[11px] text-muted-foreground truncate">Note: {d.note}</p>
+                          )}
+                          {showCountdown && (
+                            <p className="text-[11px] text-muted-foreground">Timeout: {countdown}s</p>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            {canSetOtp && (
+                              <Button size="sm" variant="outline" onClick={() => handleOpenOtpModal(d.id)}>
+                                Set OTP
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={!canDispatch || dispatchingDeliveryId === d.id || isOffered}
+                              onClick={() => handleDispatchDelivery(d.id, selectedRider?.user_id ?? null)}
+                            >
+                              {isOffered ? 'Searching…' : 'Dispatch'}
+                            </Button>
+                            {isDelivered && podMethod === 'photo' && podPhoto && (
+                              <Button size="sm" variant="outline" onClick={() => handleViewPodPhoto(d.id, podPhoto)}>
+                                View Photo
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
-              </>
+              </div>
             )}
 
             {/* SUBSCRIPTION TAB */}
@@ -866,41 +1079,30 @@ export default function BusinessDashboardPage() {
             {/* HISTORY TAB */}
             {sidebarTab === 'history' && (
               <div className="p-4">
-                {transactions.length === 0 ? (
+                {completedDeliveries.length === 0 ? (
                   <div className="flex flex-col items-center justify-center text-center py-12">
                     <Receipt size={24} className="text-gray-300 mb-3" />
-                    <div className="text-sm font-semibold text-muted-foreground mb-1">Aucune transaction</div>
-                    <div className="text-xs text-muted-foreground">Vos transactions apparaîtront ici</div>
+                    <div className="text-sm font-semibold text-muted-foreground mb-1">No delivery history yet</div>
+                    <div className="text-xs text-muted-foreground">Delivered, cancelled, and expired deliveries appear here.</div>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {transactions.map((tx) => {
-                      const typeStyles = {
-                        subscription: { bg: 'bg-sky-100', text: 'text-sky-700', icon: CreditCard },
-                        top_up: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: Wallet },
-                        delivery_charge: { bg: 'bg-amber-100', text: 'text-amber-700', icon: Package },
-                        commission: { bg: 'bg-purple-100', text: 'text-purple-700', icon: TrendingUp },
-                        payout: { bg: 'bg-blue-100', text: 'text-blue-700', icon: DollarSign },
-                      }[tx.type] || { bg: 'bg-gray-100', text: 'text-gray-700', icon: Receipt };
-                      const IconComp = typeStyles.icon;
-
+                    {completedDeliveries.map((d) => {
+                      const badgeClass = statusColor[d.status] || 'bg-slate-100 text-slate-600 border-slate-200';
                       return (
-                        <div key={tx.id} className="bg-white border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                        <div key={d.id} className="bg-white border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2">
-                              <div className={`${typeStyles.bg} ${typeStyles.text} p-2 rounded-lg flex-shrink-0`}>
-                                <IconComp size={14} />
+                              <div className="bg-emerald-100 text-emerald-700 p-2 rounded-lg flex-shrink-0">
+                                <CheckCircle2 size={14} />
                               </div>
-                              <div className="text-sm font-semibold text-foreground">
-                                {tx.type === 'subscription' ? 'Abonnement' : tx.type === 'top_up' ? 'Recharge' : tx.type === 'delivery_charge' ? 'Livraison' : tx.type === 'commission' ? 'Commission' : 'Paiement'}
-                              </div>
+                              <div className={`text-xs border rounded-full px-2 py-0.5 ${badgeClass}`}>{d.status}</div>
                             </div>
-                            <div className={`text-sm font-bold ${tx.type === 'top_up' || tx.type === 'commission' ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {tx.type === 'top_up' || tx.type === 'commission' ? '+' : '-'}{tx.amount} MAD
-                            </div>
+                            <div className="text-xs text-muted-foreground">{d.rider_name || 'Unassigned'}</div>
                           </div>
-                          <div className="text-xs text-muted-foreground text-truncate">{tx.description}</div>
-                          <div className="text-xs text-gray-500 mt-1">{new Date(tx.created_at).toLocaleDateString('fr-FR')} à {new Date(tx.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+                          <div className="text-sm font-semibold text-foreground truncate">{d.dropoff_address}</div>
+                          <div className="text-xs text-muted-foreground truncate">{d.pickup_address}</div>
+                          <div className="text-xs text-gray-500 mt-1">{new Date(d.completed_at || d.created_at).toLocaleString()}</div>
                         </div>
                       );
                     })}

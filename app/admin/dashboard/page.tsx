@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { userService, riderService, businessService, deliveryService } from '@/lib/storage';
 import { createClient } from '@/lib/supabase/client';
+import 'leaflet/dist/leaflet.css';
 import {
   MapPin,
   Users,
@@ -22,16 +23,214 @@ import {
 import type { User, Rider, Business, Delivery } from '@/lib/types';
 import Link from 'next/link';
 
+const MAP_BOUNDS = { latMin: 35.74, latMax: 35.79, lngMin: -5.86, lngMax: -5.8 };
+
+function seedLocation(id: string): { lat: number; lng: number } {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
+  const lat = MAP_BOUNDS.latMin + ((h & 0xff) / 255) * (MAP_BOUNDS.latMax - MAP_BOUNDS.latMin);
+  const lng = MAP_BOUNDS.lngMin + (((h >> 8) & 0xff) / 255) * (MAP_BOUNDS.lngMax - MAP_BOUNDS.lngMin);
+  return { lat, lng };
+}
+
+function getRiderLocation(rider: Rider): { lat: number; lng: number } {
+  if (typeof rider.last_lat === 'number' && typeof rider.last_lng === 'number') {
+    return { lat: rider.last_lat, lng: rider.last_lng };
+  }
+  const current = rider.current_location as { lat: number; lng: number } | null;
+  if (current) return current;
+  return seedLocation(rider.id);
+}
+
+function getDeliveryPoint(delivery: Delivery, kind: 'pickup' | 'dropoff'): { lat: number; lng: number } {
+  if (kind === 'pickup' && typeof delivery.pickup_lat === 'number' && typeof delivery.pickup_lng === 'number') {
+    return { lat: delivery.pickup_lat, lng: delivery.pickup_lng };
+  }
+  if (kind === 'dropoff' && typeof delivery.dropoff_lat === 'number' && typeof delivery.dropoff_lng === 'number') {
+    return { lat: delivery.dropoff_lat, lng: delivery.dropoff_lng };
+  }
+  return seedLocation(`${delivery.id}-${kind}`);
+}
+
+function getRouteColor(status: Delivery['status']): string {
+  const byStatus: Record<Delivery['status'], string> = {
+    pending: '#f59e0b',
+    offered: '#f59e0b',
+    accepted: '#0284c7',
+    picked_up: '#8b5cf6',
+    in_transit: '#06b6d4',
+    delivered: '#10b981',
+    cancelled: '#64748b',
+    expired: '#64748b',
+  };
+  return byStatus[status] || '#94a3b8';
+}
+
+interface AdminLiveMapProps {
+  riders: Rider[];
+  deliveries: Delivery[];
+}
+
+function AdminLiveMap({ riders, deliveries }: AdminLiveMapProps) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+  const leafletRef = useRef<any>(null);
+  const ridersLayerRef = useRef<any>(null);
+  const routesLayerRef = useRef<any>(null);
+  const didFitBoundsRef = useRef(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const initMap = async () => {
+      if (!mapContainerRef.current || mapRef.current) return;
+      const L = await import('leaflet');
+      if (!mounted) return;
+      leafletRef.current = L;
+
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: true,
+        attributionControl: true,
+      });
+
+      const tangierBounds = L.latLngBounds(
+        [MAP_BOUNDS.latMin, MAP_BOUNDS.lngMin],
+        [MAP_BOUNDS.latMax, MAP_BOUNDS.lngMax]
+      );
+
+      map.fitBounds(tangierBounds, { padding: [24, 24] });
+      map.setMaxBounds(tangierBounds.pad(0.1));
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map);
+
+      ridersLayerRef.current = L.layerGroup().addTo(map);
+      routesLayerRef.current = L.layerGroup().addTo(map);
+      mapRef.current = map;
+      setTimeout(() => map.invalidateSize(), 50);
+    };
+
+    void initMap();
+
+    return () => {
+      mounted = false;
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      ridersLayerRef.current = null;
+      routesLayerRef.current = null;
+      leafletRef.current = null;
+      didFitBoundsRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!leafletRef.current || !ridersLayerRef.current) return;
+    const L = leafletRef.current;
+    const layer = ridersLayerRef.current;
+    layer.clearLayers();
+
+    for (const rider of riders) {
+      const loc = getRiderLocation(rider);
+      const fillColor = rider.status === 'available'
+        ? '#10b981'
+        : rider.status === 'busy'
+          ? '#f59e0b'
+          : '#94a3b8';
+
+      L.circleMarker([loc.lat, loc.lng], {
+        radius: 7,
+        fillColor,
+        fillOpacity: 0.95,
+        color: '#ffffff',
+        weight: 2,
+      })
+        .addTo(layer)
+        .bindTooltip(`${rider.name} · ${rider.status}`, { direction: 'top', offset: [0, -8] });
+    }
+  }, [riders]);
+
+  useEffect(() => {
+    if (!leafletRef.current || !routesLayerRef.current) return;
+    const L = leafletRef.current;
+    const layer = routesLayerRef.current;
+    layer.clearLayers();
+
+    const activeStatuses: Delivery['status'][] = ['pending', 'offered', 'accepted', 'picked_up', 'in_transit'];
+    const activeDeliveries = deliveries.filter((delivery) => activeStatuses.includes(delivery.status));
+
+    for (const delivery of activeDeliveries) {
+      const pickup = getDeliveryPoint(delivery, 'pickup');
+      const dropoff = getDeliveryPoint(delivery, 'dropoff');
+      const routeColor = getRouteColor(delivery.status);
+      const dash = ['pending', 'offered'].includes(delivery.status) ? '6 6' : undefined;
+
+      L.polyline([
+        [pickup.lat, pickup.lng],
+        [dropoff.lat, dropoff.lng],
+      ], {
+        color: routeColor,
+        weight: 3,
+        dashArray: dash,
+      })
+        .addTo(layer)
+        .bindTooltip(`${delivery.business_name} · ${delivery.status}`, { direction: 'top', offset: [0, -8] });
+
+      L.circleMarker([pickup.lat, pickup.lng], {
+        radius: 4,
+        fillColor: '#0ea5e9',
+        fillOpacity: 0.95,
+        color: '#ffffff',
+        weight: 2,
+      }).addTo(layer);
+
+      L.circleMarker([dropoff.lat, dropoff.lng], {
+        radius: 5,
+        fillColor: '#ef4444',
+        fillOpacity: 0.95,
+        color: '#ffffff',
+        weight: 2,
+      }).addTo(layer);
+    }
+
+    if (!mapRef.current || didFitBoundsRef.current || (riders.length === 0 && activeDeliveries.length === 0)) return;
+    const points: [number, number][] = [];
+    for (const rider of riders) {
+      const loc = getRiderLocation(rider);
+      points.push([loc.lat, loc.lng]);
+    }
+    for (const delivery of activeDeliveries) {
+      const pickup = getDeliveryPoint(delivery, 'pickup');
+      const dropoff = getDeliveryPoint(delivery, 'dropoff');
+      points.push([pickup.lat, pickup.lng], [dropoff.lat, dropoff.lng]);
+    }
+    if (points.length > 0) {
+      mapRef.current.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 14 });
+      didFitBoundsRef.current = true;
+    }
+  }, [deliveries, riders]);
+
+  return <div ref={mapContainerRef} role="region" aria-label="Admin live rider and delivery map" className="h-full w-full rounded-2xl" />;
+}
+
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [riders, setRiders] = useState<Rider[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [statusDraftByDelivery, setStatusDraftByDelivery] = useState<Record<string, Delivery['status']>>({});
+  const [assignDraftByDelivery, setAssignDraftByDelivery] = useState<Record<string, string>>({});
+  const [mutatingDeliveryId, setMutatingDeliveryId] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState('');
 
   useEffect(() => {
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
 
     async function init() {
       const user = await userService.getCurrentUser();
@@ -50,7 +249,14 @@ export default function AdminDashboardPage() {
     }
     init();
 
-    return () => { if (channel) supabase.removeChannel(channel); };
+    pollInterval = setInterval(() => {
+      void loadData();
+    }, 8000);
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, [router]);
 
   const loadData = async () => {
@@ -62,6 +268,39 @@ export default function AdminDashboardPage() {
   const handleLogout = async () => {
     await userService.logout();
     router.push('/admin');
+  };
+
+  const handleOverrideStatus = async (deliveryId: string, fallbackStatus: Delivery['status']) => {
+    const nextStatus = statusDraftByDelivery[deliveryId] ?? fallbackStatus;
+    setMutatingDeliveryId(deliveryId);
+    try {
+      await deliveryService.adminOverrideStatus(deliveryId, nextStatus);
+      setActionMsg(`Delivery updated to ${nextStatus.replace('_', ' ')}`);
+      await loadData();
+      setTimeout(() => setActionMsg(''), 4000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to override status';
+      setActionMsg(message);
+    } finally {
+      setMutatingDeliveryId(null);
+    }
+  };
+
+  const handleAssignRider = async (deliveryId: string) => {
+    const riderId = assignDraftByDelivery[deliveryId];
+    if (!riderId) return;
+    setMutatingDeliveryId(deliveryId);
+    try {
+      await deliveryService.adminAssignDelivery(deliveryId, riderId, false);
+      setActionMsg('Rider assigned manually');
+      await loadData();
+      setTimeout(() => setActionMsg(''), 4000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to assign rider';
+      setActionMsg(message);
+    } finally {
+      setMutatingDeliveryId(null);
+    }
   };
 
   if (!currentUser) return null;
@@ -90,6 +329,9 @@ export default function AdminDashboardPage() {
       picked_up: 'bg-violet-100 text-violet-700 border-violet-200',
       in_transit: 'bg-cyan-100 text-cyan-700 border-cyan-200',
       delivered: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      offered: 'bg-amber-100 text-amber-700 border-amber-200',
+      expired: 'bg-slate-100 text-slate-600 border-slate-200',
+      cancelled: 'bg-slate-100 text-slate-600 border-slate-200',
     };
     return variants[status] || 'bg-slate-100 text-slate-500 border-slate-200';
   };
@@ -156,10 +398,24 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {actionMsg && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
+                {actionMsg}
+              </div>
+            )}
             <div className="text-right hidden sm:block">
               <p className="text-sm font-semibold text-foreground">{currentUser.name}</p>
               <p className="text-xs text-muted-foreground">Administrator</p>
             </div>
+            <Link href="/admin/users">
+              <Button
+                variant="outline"
+                className="rounded-xl border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Users
+              </Button>
+            </Link>
             <Button
               variant="outline"
               size="icon"
@@ -196,7 +452,7 @@ export default function AdminDashboardPage() {
           })}
         </div>
 
-        {/* Live Map Placeholder */}
+        {/* Live Map */}
         <Card className="border border-violet-100 bg-white shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -210,32 +466,15 @@ export default function AdminDashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="relative aspect-video w-full rounded-2xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 overflow-hidden">
-              {/* Fake map grid */}
-              <div className="absolute inset-0 opacity-30" style={{
-                backgroundImage: 'linear-gradient(hsl(243 75% 80%) 1px, transparent 1px), linear-gradient(90deg, hsl(243 75% 80%) 1px, transparent 1px)',
-                backgroundSize: '40px 40px'
-              }} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center space-y-4">
-                  <div className="flex gap-2 justify-center mb-4">
-                    {riders.map((rider, i) => (
-                      <div
-                        key={rider.id}
-                        className={`h-4 w-4 rounded-full border-2 border-white shadow-md ${
-                          rider.status === 'available' ? 'bg-emerald-500' :
-                          rider.status === 'busy' ? 'bg-amber-500' : 'bg-slate-400'
-                        } animate-pulse`}
-                        style={{ animationDelay: `${i * 300}ms` }}
-                      />
-                    ))}
-                  </div>
-                  <div className="rounded-2xl bg-white/80 backdrop-blur px-6 py-4 shadow-sm">
-                    <MapPin className="h-8 w-8 text-violet-500 mx-auto mb-2" />
-                    <p className="text-sm font-bold text-foreground">Map Integration Ready</p>
-                    <p className="text-xs text-muted-foreground mt-1">Add Google Maps API key to see live locations</p>
-                  </div>
-                </div>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2 text-xs">
+                <Badge className={`border ${getStatusBadge('available')}`}>Online: {availableRiders}</Badge>
+                <Badge className={`border ${getStatusBadge('busy')}`}>Busy: {busyRiders}</Badge>
+                <Badge className={`border ${getStatusBadge('offline')}`}>Offline: {riders.length - availableRiders - busyRiders}</Badge>
+                <Badge className={`border ${getStatusBadge('pending')}`}>Active deliveries: {activeDeliveries}</Badge>
+              </div>
+              <div className="relative aspect-video w-full rounded-2xl border border-violet-100 overflow-hidden bg-slate-50">
+                <AdminLiveMap riders={riders} deliveries={deliveries} />
               </div>
             </div>
           </CardContent>
@@ -339,42 +578,109 @@ export default function AdminDashboardPage() {
             <Card className="border border-emerald-100 bg-white shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-bold">Delivery Management</CardTitle>
-                <CardDescription>Monitor all deliveries and their status</CardDescription>
+                <CardDescription>Monitor, override status, and manually assign riders when dispatch fails</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {deliveries.slice(0, 10).map((delivery) => (
                     <div
                       key={delivery.id}
-                      className="flex items-start justify-between p-4 rounded-xl border border-border bg-background hover:bg-emerald-50/50 hover:border-emerald-100 transition-all"
+                      className="space-y-3 rounded-xl border border-border bg-background p-4 transition-all hover:bg-emerald-50/50 hover:border-emerald-100"
                     >
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge className={`text-xs border ${getStatusBadge(delivery.status)}`}>
-                            {delivery.status.replace('_', ' ')}
-                          </Badge>
-                          <p className="text-sm font-semibold text-foreground">{delivery.business_name}</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge className={`text-xs border ${getStatusBadge(delivery.status)}`}>
+                              {delivery.status.replace('_', ' ')}
+                            </Badge>
+                            <p className="text-sm font-semibold text-foreground">{delivery.business_name}</p>
+                          </div>
+                          <div className="text-xs text-muted-foreground space-y-1">
+                            <p className="flex items-center gap-1.5">
+                              <span className="h-1.5 w-1.5 rounded-full bg-slate-400 flex-shrink-0" />
+                              {delivery.pickup_address}
+                            </p>
+                            <p className="flex items-center gap-1.5">
+                              <MapPin className="h-3 w-3 text-violet-500 flex-shrink-0" />
+                              {delivery.dropoff_address}
+                            </p>
+                          </div>
+                          {delivery.rider_name && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {delivery.rider_name}
+                            </p>
+                          )}
                         </div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <p className="flex items-center gap-1.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-slate-400 flex-shrink-0" />
-                            {delivery.pickup_address}
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <MapPin className="h-3 w-3 text-violet-500 flex-shrink-0" />
-                            {delivery.dropoff_address}
-                          </p>
+                        <div className="ml-4 flex-shrink-0 text-right">
+                          <p className="text-sm font-bold text-foreground">{delivery.price} MAD</p>
+                          <p className="text-xs text-muted-foreground">~{delivery.estimated_duration} min</p>
                         </div>
-                        {delivery.rider_name && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {delivery.rider_name}
-                          </p>
-                        )}
                       </div>
-                      <div className="text-right ml-4 flex-shrink-0">
-                        <p className="text-sm font-bold text-foreground">{delivery.price} MAD</p>
-                        <p className="text-xs text-muted-foreground">~{delivery.estimated_duration} min</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Override status
+                          </label>
+                          <div className="flex gap-2">
+                            <select
+                              className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+                              value={statusDraftByDelivery[delivery.id] ?? delivery.status}
+                              onChange={(event) =>
+                                setStatusDraftByDelivery((prev) => ({
+                                  ...prev,
+                                  [delivery.id]: event.target.value as Delivery['status'],
+                                }))
+                              }
+                            >
+                              {['pending', 'offered', 'accepted', 'picked_up', 'in_transit', 'delivered', 'cancelled', 'expired'].map((status) => (
+                                <option key={status} value={status}>
+                                  {status.replace('_', ' ')}
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={mutatingDeliveryId === delivery.id}
+                              onClick={() => handleOverrideStatus(delivery.id, delivery.status)}
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Manual assign
+                          </label>
+                          <div className="flex gap-2">
+                            <select
+                              className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+                              value={assignDraftByDelivery[delivery.id] ?? ''}
+                              onChange={(event) =>
+                                setAssignDraftByDelivery((prev) => ({
+                                  ...prev,
+                                  [delivery.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Select rider</option>
+                              {riders.map((rider) => (
+                                <option key={rider.id} value={rider.id}>
+                                  {rider.name} ({rider.status})
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              size="sm"
+                              disabled={!assignDraftByDelivery[delivery.id] || mutatingDeliveryId === delivery.id}
+                              onClick={() => handleAssignRider(delivery.id)}
+                            >
+                              Assign
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
