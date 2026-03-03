@@ -52,15 +52,6 @@ function formatDistanceMeters(value: number): string {
   return `${Math.max(0, Math.round(value))} m`;
 }
 
-function formatDurationSeconds(seconds: number): string {
-  const safe = Math.max(0, Math.round(seconds));
-  if (safe < 60) return `${safe}s`;
-  const h = Math.floor(safe / 3600);
-  const m = Math.round((safe % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m} min`;
-}
-
 function formatEtaCountdown(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
   const m = Math.floor(safe / 60);
