@@ -1262,25 +1262,6 @@ export default function RiderDashboardPage() {
                     </div>
                   )}
 
-                  {navigationRoute?.ok && (
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="rounded-xl bg-white border border-sky-100 p-2.5 text-center">
-                        <p className="text-[11px] text-muted-foreground">Distance</p>
-                        <p className="text-sm font-bold text-foreground">{formatDistanceMeters(navigationRoute.distance_m)}</p>
-                      </div>
-                      <div className="rounded-xl bg-white border border-sky-100 p-2.5 text-center">
-                        <p className="text-[11px] text-muted-foreground">Duree</p>
-                        <p className="text-sm font-bold text-foreground">{formatDurationSeconds(navigationRoute.duration_s)}</p>
-                      </div>
-                      <div className="rounded-xl bg-white border border-sky-100 p-2.5 text-center">
-                        <p className="text-[11px] text-muted-foreground">ETA</p>
-                        <p className="text-sm font-bold text-foreground">
-                          {new Date(navigationRoute.eta_iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
                   {navigationError && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
                       {navigationError}
