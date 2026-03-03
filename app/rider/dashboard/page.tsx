@@ -267,7 +267,7 @@ function RiderLiveMap({ rider, activeDelivery, assignedDelivery, liveLocation, n
 
     const routeDelivery = activeDelivery ?? assignedDelivery;
     if (!routeDelivery) {
-      map.setView([riderLoc.lat, riderLoc.lng], 13);
+      map.panTo([riderLoc.lat, riderLoc.lng]);
       return;
     }
 
@@ -307,6 +307,11 @@ function RiderLiveMap({ rider, activeDelivery, assignedDelivery, liveLocation, n
       .bindTooltip('Dropoff', { direction: 'top', offset: [0, -8] });
 
     map.fitBounds(L.latLngBounds(routePoints), { padding: [32, 32], maxZoom: 15 });
+
+    // Ensure rider marker stays visible — pan if rider drifted outside the current view
+    if (!map.getBounds().contains([riderLoc.lat, riderLoc.lng])) {
+      map.panTo([riderLoc.lat, riderLoc.lng]);
+    }
   }, [rider, activeDelivery, assignedDelivery, liveLocation, mapReady, navigationRoute]);
 
   return <div ref={mapContainerRef} role="region" aria-label="Rider live route map for Tangier" className="h-full w-full rounded-2xl" />;
