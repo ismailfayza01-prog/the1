@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { createClient } from '@/lib/supabase/client';
 import { userService, businessService, deliveryService, riderService } from '@/lib/storage';
+import { MAP_3D_ENABLED } from '@/components/maps/config';
+import { BusinessMap3D } from '@/components/maps/BusinessMap3D';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Package, CreditCard, LogOut,
@@ -28,6 +30,25 @@ function seedLocation(id: string): { lat: number; lng: number } {
   return { lat, lng };
 }
 
+function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const earth = 6_371_000;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return earth * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function formatEtaCountdownBiz(seconds: number): string {
+  const safe = Math.max(0, Math.round(seconds));
+  const m = Math.floor(safe / 60);
+  const s = safe % 60;
+  if (m === 0) return `${s} sec`;
+  return `${m} min ${s.toString().padStart(2, '0')} sec`;
+}
+
 function getRiderLocation(rider: Rider): { lat: number; lng: number } {
   if (typeof rider.last_lat === 'number' && typeof rider.last_lng === 'number') {
     return { lat: rider.last_lat, lng: rider.last_lng };
@@ -35,6 +56,112 @@ function getRiderLocation(rider: Rider): { lat: number; lng: number } {
   const fromJson = (rider.current_location as { lat: number; lng: number } | null);
   if (fromJson) return fromJson;
   return seedLocation(rider.id);
+}
+
+function getRiderStatusColor(status: Rider['status']): string {
+  if (status === 'available') return '#10b981';
+  if (status === 'busy') return '#f59e0b';
+  return '#94a3b8';
+}
+
+function getRiderMotoIcon(L: any, status: Rider['status'], isSelected = false): any {
+  const size = isSelected ? 44 : 38;
+  const statusColor = getRiderStatusColor(status);
+  const statusClass = status === 'available'
+    ? 'map-rider-status--online'
+    : status === 'busy'
+      ? 'map-rider-status--busy'
+      : 'map-rider-status--offline';
+  return L.divIcon({
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    html: `
+      <div class="map-rider-marker" style="width:${size}px;height:${size}px;">
+        <div class="map-rider-core" style="width:${size}px;height:${size}px;">
+          <svg class="map-rider-bike" viewBox="0 0 24 24" width="${isSelected ? 22 : 20}" height="${isSelected ? 22 : 20}" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="6" cy="17" r="3"></circle>
+            <circle cx="18" cy="17" r="3"></circle>
+            <path d="M6 17h6l2-6h-4l-2 6"></path>
+            <path d="M14 7h3l2 4"></path>
+          </svg>
+        </div>
+        <div class="map-rider-status ${statusClass}" style="background:${statusColor};"></div>
+      </div>
+    `,
+  });
+}
+
+function getPickupFlagIcon(L: any): any {
+  return L.divIcon({
+    className: '',
+    iconSize: [30, 36],
+    iconAnchor: [15, 34],
+    html: `
+      <div class="map-flag-marker">
+        <div class="map-flag-pole map-flag-pole--pickup"></div>
+        <div class="map-flag-cloth map-flag-cloth--pickup"></div>
+      </div>
+    `,
+  });
+}
+
+function getDropoffFlagIcon(L: any): any {
+  return L.divIcon({
+    className: '',
+    iconSize: [30, 36],
+    iconAnchor: [15, 34],
+    html: `
+      <div class="map-flag-marker">
+        <div class="map-flag-pole map-flag-pole--dropoff"></div>
+        <div class="map-flag-cloth map-flag-cloth--dropoff"></div>
+      </div>
+    `,
+  });
+}
+
+interface EtaCountdownCardProps {
+  phase: 'to_pickup' | 'to_dropoff' | 'delivered' | null;
+  seconds: number | null;
+  distanceM: number | null;
+}
+
+function EtaCountdownCard({ phase, seconds, distanceM }: EtaCountdownCardProps) {
+  if (!phase) return null;
+
+  if (phase === 'delivered') {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3 shadow-sm">
+        <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0" />
+        <p className="text-sm font-bold text-emerald-700">Delivered</p>
+      </div>
+    );
+  }
+
+  const label = phase === 'to_pickup' ? 'Rider arriving at pickup' : 'Delivery in progress';
+  const sublabel = phase === 'to_pickup' ? 'to pickup' : 'to dropoff';
+
+  return (
+    <div className="rounded-2xl border border-sky-200 bg-sky-50/60 px-4 py-3 shadow-sm space-y-1">
+      <div className="flex items-center gap-2">
+        <Bike className="h-4 w-4 text-sky-600 flex-shrink-0" />
+        <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">{label}</p>
+      </div>
+      <div className="flex items-end justify-between gap-3">
+        <p className="text-2xl font-extrabold text-foreground tabular-nums">
+          {seconds !== null ? formatEtaCountdownBiz(seconds) : '—'}
+        </p>
+        {distanceM !== null && (
+          <p className="text-xs text-muted-foreground pb-0.5">
+            {distanceM >= 1000
+              ? `${(distanceM / 1000).toFixed(1)} km`
+              : `${Math.round(distanceM)} m`}{' '}
+            · {sublabel}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 interface BusinessMapProps {
@@ -144,18 +271,8 @@ function BusinessMap({
     for (const rider of riders) {
       const loc = getRiderLocation(rider);
       const isSelected = rider.id === selectedRiderId;
-      const fillColor = rider.status === 'available'
-        ? '#10b981'
-        : rider.status === 'busy'
-          ? '#f59e0b'
-          : '#94a3b8';
-
-      const marker = L.circleMarker([loc.lat, loc.lng], {
-        radius: isSelected ? 9 : 7,
-        fillColor,
-        fillOpacity: 0.95,
-        color: '#ffffff',
-        weight: 2,
+      const marker = L.marker([loc.lat, loc.lng], {
+        icon: getRiderMotoIcon(L, rider.status, isSelected),
       });
 
       marker
@@ -200,24 +317,16 @@ function BusinessMap({
     pinsLayer.clearLayers();
 
     if (pickupPin) {
-      L.circleMarker([pickupPin.lat, pickupPin.lng], {
-        radius: 7,
-        fillColor: '#0ea5e9',
-        fillOpacity: 0.95,
-        color: '#ffffff',
-        weight: 2,
+      L.marker([pickupPin.lat, pickupPin.lng], {
+        icon: getPickupFlagIcon(L),
       })
         .addTo(pinsLayer)
         .bindTooltip('Pickup pin', { direction: 'top', offset: [0, -8] });
     }
 
     if (dropoffPin) {
-      L.circleMarker([dropoffPin.lat, dropoffPin.lng], {
-        radius: 7,
-        fillColor: '#ef4444',
-        fillOpacity: 0.95,
-        color: '#ffffff',
-        weight: 2,
+      L.marker([dropoffPin.lat, dropoffPin.lng], {
+        icon: getDropoffFlagIcon(L),
       })
         .addTo(pinsLayer)
         .bindTooltip('Dropoff pin', { direction: 'top', offset: [0, -8] });
@@ -287,9 +396,6 @@ export default function BusinessDashboardPage() {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual' | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState('');
-  const [topUpAmount, setTopUpAmount] = useState('');
-  const [addingCredits, setAddingCredits] = useState(false);
-  const [topUpError, setTopUpError] = useState('');
   const [dispatchingDeliveryId, setDispatchingDeliveryId] = useState<string | null>(null);
   const [nowTs, setNowTs] = useState(Date.now());
   const [otpModalOpen, setOtpModalOpen] = useState(false);
@@ -297,6 +403,12 @@ export default function BusinessDashboardPage() {
   const [otpValue, setOtpValue] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpSubmitting, setOtpSubmitting] = useState(false);
+
+  const [riderEtaSeconds, setRiderEtaSeconds] = useState<number | null>(null);
+  const [riderEtaPhase, setRiderEtaPhase] = useState<'to_pickup' | 'to_dropoff' | 'delivered' | null>(null);
+  const [riderEtaDistance, setRiderEtaDistance] = useState<number | null>(null);
+  const riderEtaIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const riderEtaOriginRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -327,6 +439,112 @@ export default function BusinessDashboardPage() {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Business-side rider ETA computation
+  useEffect(() => {
+    if (riderEtaIntervalRef.current) {
+      clearInterval(riderEtaIntervalRef.current);
+      riderEtaIntervalRef.current = null;
+    }
+
+    // Find the active delivery for this business
+    const activeDelivery = deliveries.find((d) =>
+      ['accepted', 'picked_up', 'in_transit'].includes(d.status) && d.rider_id
+    );
+
+    if (!activeDelivery || !activeDelivery.rider_id) {
+      const deliveredRecently = deliveries.find((d) => d.status === 'delivered');
+      if (deliveredRecently) {
+        setRiderEtaPhase('delivered');
+      } else {
+        setRiderEtaPhase(null);
+        setRiderEtaSeconds(null);
+        setRiderEtaDistance(null);
+      }
+      return;
+    }
+
+    // Determine phase and target coordinates
+    const isPickupPhase = activeDelivery.status === 'accepted';
+    const targetLat = isPickupPhase ? activeDelivery.pickup_lat : activeDelivery.dropoff_lat;
+    const targetLng = isPickupPhase ? activeDelivery.pickup_lng : activeDelivery.dropoff_lng;
+
+    if (typeof targetLat !== 'number' || typeof targetLng !== 'number') {
+      setRiderEtaPhase(null);
+      return;
+    }
+
+    const target = { lat: targetLat, lng: targetLng };
+
+    // Find the assigned rider's location
+    const assignedRider = allRiders.find((r) => r.id === activeDelivery.rider_id);
+    if (!assignedRider) {
+      setRiderEtaPhase(null);
+      return;
+    }
+
+    const riderLoc = getRiderLocation(assignedRider);
+    const phase: 'to_pickup' | 'to_dropoff' = isPickupPhase ? 'to_pickup' : 'to_dropoff';
+    setRiderEtaPhase(phase);
+
+    // Only recompute if rider moved >100m since last compute
+    const prevOrigin = riderEtaOriginRef.current;
+    const movedEnough = !prevOrigin || haversineMeters(prevOrigin, riderLoc) > 100;
+
+    if (!movedEnough && riderEtaSeconds !== null) {
+      riderEtaIntervalRef.current = setInterval(() => {
+        setRiderEtaSeconds((prev) => (prev === null || prev <= 0 ? 0 : prev - 1));
+      }, 1000);
+      return;
+    }
+
+    riderEtaOriginRef.current = riderLoc;
+
+    async function computeEta() {
+      const distM = haversineMeters(riderLoc, target);
+      setRiderEtaDistance(distM);
+
+      let durationSeconds: number;
+
+      try {
+        const res = await fetch('/api/navigation/route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ origin: riderLoc, destination: target, profile: 'driving', locale: 'fr' }),
+        });
+        if (res.ok) {
+          const payload = await res.json();
+          if (payload?.ok && payload.duration_s > 0) {
+            durationSeconds = payload.duration_s;
+            setRiderEtaDistance(payload.distance_m ?? distM);
+          } else {
+            throw new Error('degraded');
+          }
+        } else {
+          throw new Error('api-error');
+        }
+      } catch {
+        durationSeconds = Math.round(distM / (25000 / 3600));
+      }
+
+      setRiderEtaSeconds(durationSeconds);
+
+      if (riderEtaIntervalRef.current) clearInterval(riderEtaIntervalRef.current);
+      riderEtaIntervalRef.current = setInterval(() => {
+        setRiderEtaSeconds((prev) => (prev === null || prev <= 0 ? 0 : prev - 1));
+      }, 1000);
+    }
+
+    void computeEta();
+
+    return () => {
+      if (riderEtaIntervalRef.current) {
+        clearInterval(riderEtaIntervalRef.current);
+        riderEtaIntervalRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveries, allRiders]);
 
   const loadData = async (userId: string) => {
     const biz = await businessService.getByUserId(userId);
@@ -360,6 +578,7 @@ export default function BusinessDashboardPage() {
     setSubmitting(true);
     try {
       const preferredRiderUserId = selectedRider?.user_id ?? null;
+      let dispatchConfirmed = false;
       const created = await deliveryService.create({
         business_id: business.id,
         business_name: business.name,
@@ -384,12 +603,11 @@ export default function BusinessDashboardPage() {
         completed_at: null,
       });
 
-      if (preferredRiderUserId) {
-        try {
-          await deliveryService.dispatchDelivery(created.id, preferredRiderUserId);
-        } catch (dispatchErr) {
-          console.error('Auto-dispatch error', dispatchErr);
-        }
+      try {
+        await deliveryService.dispatchDelivery(created.id, preferredRiderUserId);
+        dispatchConfirmed = true;
+      } catch (dispatchErr) {
+        console.error('Auto-dispatch error', dispatchErr);
       }
 
       if (business.subscription_tier !== 'none') await businessService.useRide(business.id);
@@ -402,9 +620,11 @@ export default function BusinessDashboardPage() {
       setDropoffCoords(null);
       setPinMode('dropoff');
       setSelectedRiderId(null);
-      setSuccessMsg(preferredRiderUserId
-        ? 'Livraison créée + rider sélectionné. Suivez-la dans Track.'
-        : 'Livraison créée. Choisissez un rider puis suivez-la dans Track.');
+      setSuccessMsg(
+        dispatchConfirmed
+          ? 'Livraison créée et dispatch envoyée au rider.'
+          : 'Livraison créée. Aucun rider disponible maintenant, utilisez Track > Dispatch.'
+      );
       setTimeout(() => setSuccessMsg(''), 4000);
       setSidebarTab('track');
     } finally {
@@ -483,39 +703,6 @@ export default function BusinessDashboardPage() {
       setSubscriptionError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       setSubscribing(false);
-    }
-  };
-
-  const handleAddCredits = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!business || !currentUser) return;
-    const amount = parseFloat(topUpAmount);
-    if (amount <= 0 || !Number.isFinite(amount)) {
-      setTopUpError('Montant invalide');
-      return;
-    }
-    if (amount > 99999) {
-      setTopUpError('Le montant ne peut pas dépasser 99 999 MAD');
-      return;
-    }
-
-    setAddingCredits(true);
-    setTopUpError('');
-    try {
-      const success = await businessService.addCredits(business.id, amount, currentUser.id);
-      if (success) {
-        setTopUpAmount('');
-        setSuccessMsg(`+${amount} MAD crédits ajoutés !`);
-        await loadData(currentUser.id);
-        setTimeout(() => setSuccessMsg(''), 4000);
-        setSidebarTab('wallet');
-      } else {
-        setTopUpError('Erreur lors de l\'ajout des crédits');
-      }
-    } catch (err) {
-      setTopUpError(err instanceof Error ? err.message : 'Erreur inconnue');
-    } finally {
-      setAddingCredits(false);
     }
   };
 
@@ -638,15 +825,39 @@ export default function BusinessDashboardPage() {
 
           {/* Canvas Map */}
           <div className="flex-1 bg-gray-50 border border-border rounded-2xl overflow-hidden min-h-0">
-            <BusinessMap
-              riders={availableRiders}
-              selectedRiderId={selectedRiderId}
-              onSelectRider={setSelectedRiderId}
-              pinMode={sidebarTab === 'create' ? pinMode : null}
-              pickupPin={pickupCoords}
-              dropoffPin={dropoffCoords}
-              onMapPin={handleMapPin}
-            />
+            {MAP_3D_ENABLED ? (
+              <BusinessMap3D
+                riders={availableRiders}
+                selectedRiderId={selectedRiderId}
+                onSelectRider={setSelectedRiderId}
+                pinMode={sidebarTab === 'create' ? pinMode : null}
+                pickupPin={pickupCoords}
+                dropoffPin={dropoffCoords}
+                onMapPin={handleMapPin}
+                className="w-full h-full rounded-2xl"
+                fallback={(
+                  <BusinessMap
+                    riders={availableRiders}
+                    selectedRiderId={selectedRiderId}
+                    onSelectRider={setSelectedRiderId}
+                    pinMode={sidebarTab === 'create' ? pinMode : null}
+                    pickupPin={pickupCoords}
+                    dropoffPin={dropoffCoords}
+                    onMapPin={handleMapPin}
+                  />
+                )}
+              />
+            ) : (
+              <BusinessMap
+                riders={availableRiders}
+                selectedRiderId={selectedRiderId}
+                onSelectRider={setSelectedRiderId}
+                pinMode={sidebarTab === 'create' ? pinMode : null}
+                pickupPin={pickupCoords}
+                dropoffPin={dropoffCoords}
+                onMapPin={handleMapPin}
+              />
+            )}
           </div>
 
           {/* Active Deliveries Strip */}
@@ -893,6 +1104,12 @@ export default function BusinessDashboardPage() {
                   <div className="text-xs text-muted-foreground">{trackDeliveries.length} active</div>
                 </div>
 
+                <EtaCountdownCard
+                  phase={riderEtaPhase}
+                  seconds={riderEtaSeconds}
+                  distanceM={riderEtaDistance}
+                />
+
                 {trackDeliveries.length === 0 ? (
                   <div className="rounded-lg border border-border bg-background p-4 text-xs text-muted-foreground">
                     No active deliveries. Create one in the Create tab.
@@ -1031,48 +1248,12 @@ export default function BusinessDashboardPage() {
                   <div className="text-2xl font-bold text-emerald-700">{business.wallet_balance} MAD</div>
                 </div>
 
-                {/* Top-Up Form */}
-                {topUpError && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-start gap-2">
-                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                    {topUpError}
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
+                  Wallet credits are managed by admin only.
+                  <div className="mt-1 text-xs text-sky-600">
+                    Ask admin to add credit and select payment method: cash, card, or check.
                   </div>
-                )}
-
-                <form onSubmit={handleAddCredits} className="space-y-4">
-                  <div>
-                    <Label htmlFor="topup-amount" className="text-xs text-muted-foreground">Montant à ajouter (MAD)</Label>
-                    <Input
-                      id="topup-amount"
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="Entrez le montant..."
-                      min="1"
-                      max="99999"
-                      step="1"
-                      value={topUpAmount}
-                      onChange={(e) => { setTopUpAmount(e.target.value); setTopUpError(''); }}
-                      className="mt-2 text-sm"
-                      required
-                      disabled={addingCredits}
-                    />
-                    <div className="text-xs text-muted-foreground mt-2">Montant minimum: 1 MAD</div>
-                  </div>
-
-                  {topUpAmount && Number.isFinite(parseFloat(topUpAmount)) && parseFloat(topUpAmount) > 0 && (
-                    <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-sm text-sky-700">
-                      Nouveau solde: {business.wallet_balance} + {topUpAmount} = <span className="font-bold">{(business.wallet_balance + parseFloat(topUpAmount)).toFixed(2)}</span> MAD
-                    </div>
-                  )}
-
-                  <Button
-                    type="submit"
-                    disabled={addingCredits || !topUpAmount}
-                    className="w-full bg-emerald-500 hover:bg-emerald-600"
-                  >
-                    {addingCredits ? 'Traitement...' : 'Ajouter des crédits'}
-                  </Button>
-                </form>
+                </div>
               </div>
             )}
 
