@@ -1164,7 +1164,22 @@ export default function RiderDashboardPage() {
               <Badge className="border bg-sky-100 text-sky-700 border-sky-200">Pickup</Badge>
               <Badge className="border bg-red-100 text-red-700 border-red-200">Dropoff</Badge>
             </div>
-            <div className="h-64 rounded-2xl border border-border overflow-hidden bg-slate-50">
+            <div className="h-[420px] rounded-2xl border border-border overflow-hidden bg-slate-50 relative">
+              {/* Next maneuver chip — top-left overlay */}
+              {navigationRoute?.ok && routeSteps.length > 0 && (
+                <div className="absolute top-3 left-3 z-10 max-w-[75%]">
+                  <div className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 shadow-lg border border-slate-100">
+                    <Navigation className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      {routeSteps[0].instruction}
+                    </span>
+                    <span className="text-xs text-muted-foreground flex-shrink-0 ml-1">
+                      · {formatDistanceMeters(routeSteps[0].distance_m)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {MAP_3D_ENABLED ? (
                 <RiderMap3D
                   rider={rider}
@@ -1191,6 +1206,23 @@ export default function RiderDashboardPage() {
                   liveLocation={liveRiderLocation}
                   navigationRoute={navigationRoute}
                 />
+              )}
+
+              {/* ETA bar — bottom overlay */}
+              {navigationRoute?.ok && etaCountdownSeconds !== null && (
+                <div className="absolute bottom-3 left-3 right-3 z-10">
+                  <div className="flex items-center justify-between rounded-xl bg-gray-900/85 backdrop-blur-sm px-4 py-2.5 text-white shadow-lg">
+                    <div className="flex items-center gap-2">
+                      <Circle className="h-3.5 w-3.5 text-emerald-400 animate-pulse flex-shrink-0" />
+                      <span className="text-sm font-bold tabular-nums">
+                        {formatEtaCountdown(etaCountdownSeconds)}
+                      </span>
+                    </div>
+                    <span className="text-xs text-white/70 font-medium">
+                      {formatDistanceMeters(navigationRoute.distance_m)}
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
           </CardContent>
