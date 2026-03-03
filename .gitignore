@@ -19,17 +19,22 @@
 .DS_Store
 *.pem
 
-# debug
+# debug and local run artifacts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
 # local env files
 .env*.local
 .env
 
-# vercel
+# local tooling/state
 .vercel
+.playwright-mcp/
+.tools/
+supabase/.temp/
+node-win-ok.txt
 
 # typescript
 *.tsbuildinfo
@@ -39,5 +44,3 @@ next-env.d.ts
 *.exe
 *.zip
 *.crdownload
-
-.vercel

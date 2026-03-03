@@ -1,0 +1,24 @@
+flowchart TD
+    A[Inputs] --> A1[Prix moyen: 22 MAD]
+    A --> A2[Commission rider: 15 MAD]
+    A --> A3[Cout variable: 1.8 MAD]
+    A --> A4[Fixes mensuels: 95 000 MAD]
+
+    A1 --> B[Marge/livraison = 5.2 MAD]
+    A2 --> B
+    A3 --> B
+
+    C[Livraisons/mois] --> D[Contribution = Livraisons x 5.2]
+    B --> D
+    A4 --> E{Contribution >= 95 000?}
+    D --> E
+
+    E -- Oui --> F[Zone viable]
+    E -- Non --> G[Phase test]
+
+    H[Scenario 90 commerces\n108 liv./jour\n2 808 liv./mois] --> G
+    I[Scenario 400 commerces\n800 liv./jour\n20 800 liv./mois] --> F
+
+    J[Riders requis = liv./jour / 15] --> K[90 commerces: 7.2 riders actifs]
+    J --> L[400 commerces: 53.3 riders actifs]
+

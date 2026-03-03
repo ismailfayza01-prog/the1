@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE 1000 — Dossier de Financement 300 000 MAD</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --primary: #4F46E5;
+    --primary-dark: #3730A3;
+    --primary-light: #818CF8;
+    --accent: #06B6D4;
+    --accent-dark: #0891B2;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --danger: #EF4444;
+    --dark: #0F172A;
+    --gray-900: #1E293B;
+    --gray-700: #334155;
+    --gray-500: #64748B;
+    --gray-300: #CBD5E1;
+    --gray-100: #F1F5F9;
+    --white: #FFFFFF;
+  }
+
+  body {
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    color: var(--gray-900);
+    background: var(--white);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  /* PAGE BREAKS */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 0;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  @media print {
+    body { margin: 0; }
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      page-break-after: always;
+      margin: 0;
+    }
+  }
+
+  /* =================== COVER PAGE =================== */
+  .cover {
+    background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 40%, #312E81 70%, #4338CA 100%);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 40mm 20mm;
+    position: relative;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234F46E5' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.5;
+  }
+
+  .cover-badge {
+    background: rgba(99, 102, 241, 0.3);
+    border: 1px solid rgba(129, 140, 248, 0.5);
+    color: #A5B4FC;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  .cover-logo {
+    position: relative;
+    margin-bottom: 16px;
+  }
+
+  .cover-logo-circle {
+    width: 90px;
+    height: 90px;
+    background: linear-gradient(135deg, #4F46E5, #06B6D4);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    box-shadow: 0 0 40px rgba(79, 70, 229, 0.5);
+  }
+
+  .cover-logo-text {
+    font-size: 28px;
+    font-weight: 900;
+    color: white;
+    letter-spacing: -1px;
+  }
+
+  .cover-title {
+    font-size: 38px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    margin-bottom: 8px;
+    background: linear-gradient(90deg, #fff, #A5B4FC);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    position: relative;
+  }
+
+  .cover-subtitle {
+    font-size: 15px;
+    color: #A5B4FC;
+    font-weight: 400;
+    margin-bottom: 30px;
+    position: relative;
+  }
+
+  .cover-amount-box {
+    position: relative;
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 16px;
+    padding: 20px 40px;
+    margin-bottom: 30px;
+  }
+
+  .cover-amount-label {
+    font-size: 10px;
+    color: #A5B4FC;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .cover-amount {
+    font-size: 42px;
+    font-weight: 900;
+    color: white;
+    letter-spacing: -2px;
+  }
+
+  .cover-amount-sub {
+    font-size: 11px;
+    color: #CBD5E1;
+    margin-top: 4px;
+  }
+
+  .cover-tags {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    position: relative;
+  }
+
+  .cover-tag {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #E2E8F0;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 9.5px;
+    font-weight: 500;
+  }
+
+  .cover-footer {
+    position: absolute;
+    bottom: 20mm;
+    left: 0; right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.4);
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+
+  /* =================== CONTENT PAGES =================== */
+  .content-page {
+    padding: 15mm 18mm 15mm 18mm;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8mm;
+    padding-bottom: 4mm;
+    border-bottom: 2px solid var(--gray-100);
+  }
+
+  .page-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .page-number {
+    font-size: 9px;
+    color: var(--gray-500);
+    font-weight: 500;
+  }
+
+  .section-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--dark);
+    letter-spacing: -0.8px;
+    line-height: 1.2;
+    margin-bottom: 2mm;
+  }
+
+  .page-subtitle {
+    font-size: 11px;
+    color: var(--gray-500);
+    margin-bottom: 6mm;
+    font-weight: 400;
+  }
+
+  /* SECTION HEADERS */
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary-dark);
+    margin: 5mm 0 2mm 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 14px;
+    background: linear-gradient(180deg, var(--primary), var(--accent));
+    border-radius: 2px;
+  }
+
+  /* CARDS */
+  .card-grid {
+    display: grid;
+    gap: 4mm;
+    margin-bottom: 4mm;
+  }
+
+  .card-grid-2 { grid-template-columns: 1fr 1fr; }
+  .card-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+  .card {
+    background: var(--gray-100);
+    border-radius: 10px;
+    padding: 4mm;
+    border: 1px solid var(--gray-300);
+  }
+
+  .card-primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border: none;
+  }
+
+  .card-accent {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    color: white;
+    border: none;
+  }
+
+  .card-success {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    border: none;
+  }
+
+  .card-warning {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    color: white;
+    border: none;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    line-height: 1;
+    margin-bottom: 3px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    opacity: 0.8;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-sub {
+    font-size: 9px;
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+
+  /* TABLES */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0;
+    font-size: 10px;
+  }
+
+  thead tr {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+  }
+
+  thead th {
+    padding: 5px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.3px;
+  }
+
+  thead th:not(:first-child) { text-align: right; }
+
+  tbody tr:nth-child(even) { background: var(--gray-100); }
+  tbody tr:hover { background: #EEF2FF; }
+
+  tbody td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--gray-300);
+    font-size: 10px;
+  }
+
+  tbody td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .highlight-row {
+    background: #EEF2FF !important;
+    font-weight: 700;
+  }
+
+  .highlight-row td { color: var(--primary-dark); }
+
+  /* KPI PILLS */
+  .kpi-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 2mm 0;
+  }
+
+  .kpi-pill {
+    background: var(--gray-100);
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 9.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .kpi-pill-value {
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  /* FLOW DIAGRAM */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin: 2mm 0;
+  }
+
+  .flow-step {
+    background: var(--primary);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 9.5px;
+    font-weight: 600;
+    text-align: center;
+    flex: 1;
+    min-width: 60px;
+  }
+
+  .flow-arrow {
+    color: var(--primary-light);
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* RISK TABLE */
+  .risk-high { color: var(--danger); font-weight: 600; }
+  .risk-med { color: var(--warning); font-weight: 600; }
+  .risk-low { color: var(--success); font-weight: 600; }
+
+  /* CHECKLIST */
+  .checklist {
+    list-style: none;
+    margin: 2mm 0;
+  }
+
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 10px;
+    border-bottom: 1px solid var(--gray-100);
+  }
+
+  .checklist li:last-child { border-bottom: none; }
+
+  .check-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+    font-size: 8px;
+    font-weight: 700;
+  }
+
+  .check-done { background: var(--success); color: white; }
+  .check-todo { background: var(--gray-300); color: var(--gray-500); }
+
+  /* PROGRESS BAR */
+  .progress-bar-container {
+    background: var(--gray-200);
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+    margin-top: 3px;
+  }
+
+  .progress-bar {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+  }
+
+  /* BUDGET BARS */
+  .budget-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .budget-label { font-size: 10px; font-weight: 500; min-width: 180px; flex-shrink: 0; }
+  .budget-bar-wrap { flex: 1; }
+  .budget-amount { font-size: 10px; font-weight: 700; color: var(--primary); min-width: 80px; text-align: right; }
+  .budget-pct { font-size: 9px; color: var(--gray-500); min-width: 30px; text-align: right; }
+
+  /* AUDIENCE BOXES */
+  .audience-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4mm;
+    margin: 2mm 0;
+  }
+
+  .audience-box {
+    border-radius: 10px;
+    padding: 4mm;
+    border-left: 4px solid;
+  }
+
+  .audience-bank { background: #EFF6FF; border-color: #2563EB; }
+  .audience-investor { background: #F0FDF4; border-color: #16A34A; }
+  .audience-grant { background: #FFF7ED; border-color: #EA580C; }
+
+  .audience-title {
+    font-size: 10px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .audience-bank .audience-title { color: #1D4ED8; }
+  .audience-investor .audience-title { color: #15803D; }
+  .audience-grant .audience-title { color: #C2410C; }
+
+  .audience-text {
+    font-size: 9.5px;
+    color: var(--gray-700);
+    line-height: 1.5;
+  }
+
+  /* TOC */
+  .toc-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px dotted var(--gray-300);
+  }
+
+  .toc-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .toc-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .toc-text { font-size: 11px; font-weight: 500; }
+  .toc-page { font-size: 9px; color: var(--gray-500); }
+
+  /* DIVIDER */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, var(--primary), transparent);
+    margin: 3mm 0;
+    opacity: 0.3;
+  }
+
+  /* NOTE BOX */
+  .note-box {
+    background: #EEF2FF;
+    border: 1px solid #C7D2FE;
+    border-left: 4px solid var(--primary);
+    border-radius: 6px;
+    padding: 3mm 4mm;
+    margin: 2mm 0;
+    font-size: 10px;
+    color: var(--primary-dark);
+  }
+
+  .note-box strong { font-weight: 700; }
+
+  /* ZONE TABLE */
+  .zone-high { background: #DCFCE7 !important; }
+  .zone-med { background: #FEF9C3 !important; }
+  .zone-low { background: #FEF2F2 !important; }
+
+  /* MILESTONE */
+  .milestone-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4mm;
+  }
+
+  .milestone-card {
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .milestone-header {
+    padding: 4mm;
+    color: white;
+    font-weight: 700;
+    font-size: 11px;
+  }
+
+  .milestone-m1 .milestone-header { background: var(--primary); }
+  .milestone-m2 .milestone-header { background: var(--accent-dark); }
+  .milestone-m3 .milestone-header { background: var(--success); }
+
+  .milestone-body {
+    background: var(--gray-100);
+    padding: 3mm 4mm;
+    border: 1px solid var(--gray-300);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    font-size: 9.5px;
+  }
+
+  .milestone-kpi {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  .milestone-kpi:last-child { border-bottom: none; }
+  .milestone-kpi-label { color: var(--gray-500); }
+  .milestone-kpi-value { font-weight: 700; color: var(--gray-900); }
+
+  /* SCENARIOS */
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4mm;
+    margin: 2mm 0;
+  }
+
+  .scenario-prudent { border-top: 4px solid var(--warning); }
+  .scenario-base { border-top: 4px solid var(--primary); }
+  .scenario-agressif { border-top: 4px solid var(--success); }
+
+  /* WATERMARK */
+  .watermark {
+    position: absolute;
+    bottom: 10mm;
+    right: 18mm;
+    font-size: 8px;
+    color: var(--gray-300);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  p { margin: 1.5mm 0; font-size: 10px; line-height: 1.6; color: var(--gray-700); }
+
+  ul { padding-left: 16px; margin: 1.5mm 0; }
+  ul li { font-size: 10px; margin-bottom: 2px; color: var(--gray-700); }
+
+  strong { font-weight: 700; color: var(--gray-900); }
+</style>
+</head>
+<body>
+
+<!-- ========== PAGE 1: COVER ========== -->
+<div class="page cover">
+  <div class="cover-badge">Dossier de Financement Confidentiel</div>
+
+  <div class="cover-logo">
+    <div class="cover-logo-circle">
+      <span class="cover-logo-text">T1</span>
+    </div>
+  </div>
+
+  <div class="cover-title">THE 1000</div>
+  <div class="cover-subtitle">Plateforme de livraison B2B urbaine — Tanger, Maroc</div>
+
+  <div class="cover-amount-box">
+    <div class="cover-amount-label">Financement Sollicité</div>
+    <div class="cover-amount">300 000 MAD</div>
+    <div class="cover-amount-sub">Plan d'accélération sur 90 jours · 350–400 commerces actifs cibles</div>
+  </div>
+
+  <div class="cover-tags">
+    <span class="cover-tag">🏦 Version Banque</span>
+    <span class="cover-tag">📈 Version Investisseur</span>
+    <span class="cover-tag">🏛️ Version Subvention</span>
+    <span class="cover-tag">🛵 Riders Auto-Entrepreneurs</span>
+    <span class="cover-tag">📦 Livraison Intra-Tanger</span>
+  </div>
+
+  <div class="cover-footer">Confidentiel · THE 1000 · Tanger 2025 · Ne pas distribuer sans autorisation</div>
+</div>
+
+<!-- ========== PAGE 2: TABLE OF CONTENTS ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">Sommaire</span>
+    </div>
+    <span class="page-number">THE 1000 — Dossier de Financement</span>
+  </div>
+
+  <div class="page-title">Table des Matières</div>
+  <div class="page-subtitle">Dossier structuré pour trois audiences : Banque · Investisseur · Subvention</div>
+
+  <div class="divider"></div>
+
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">1</div><span class="toc-text">Résumé Exécutif — Proposition & Besoin de Financement</span></div><span class="toc-page">03</span></div>
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">2</div><span class="toc-text">Problème & Preuves — Contexte Tanger</span></div><span class="toc-page">04</span></div>
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">3</div><span class="toc-text">Solution Produit — Plateforme Multi-Portails</span></div><span class="toc-page">05</span></div>
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">4</div><span class="toc-text">Opérations & Workflow E2E</span></div><span class="toc-page">06</span></div>
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">5</div><span class="toc-text">Unit Economics & Seuil de Viabilité</span></div><span class="toc-page">07</span></div>
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">6</div><span class="toc-text">Go-To-Market — Plan 3 Mois Tanger</span></div><span class="toc-page">08</span></div>
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">7</div><span class="toc-text">Modèle Financier — Hypothèses 24 Mois</span></div><span class="toc-page">09</span></div>
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">8</div><span class="toc-text">Utilisation des Fonds — 300 000 MAD</span></div><span class="toc-page">10</span></div>
+  <div class="toc-item"><div class="toc-left"><div class="toc-num">9</div><span class="toc-text">Risques, Conformité & Gouvernance</span></div><span class="toc-page">11</span></div>
+
+  <div class="divider" style="margin-top:6mm;"></div>
+
+  <div class="audience-grid" style="margin-top:4mm;">
+    <div class="audience-box audience-bank">
+      <div class="audience-title">🏦 Version Banque</div>
+      <div class="audience-text">Focus chapitres 5, 7, 8, 9 + annexes contractuelles.<br>Capacité de remboursement, discipline KPI, sécurisation des flux.</div>
+    </div>
+    <div class="audience-box audience-investor">
+      <div class="audience-title">📈 Version Investisseur</div>
+      <div class="audience-text">Focus chapitres 1, 3, 5, 6, 7 + screenshots traction.<br>Croissance, unit economics, exécution GTM mesurée.</div>
+    </div>
+    <div class="audience-box audience-grant">
+      <div class="audience-title">🏛️ Version Subvention</div>
+      <div class="audience-text">Focus chapitres 1, 2, 6, 8, 9 + impact AE/KPI.<br>Formalisation AE, digitalisation PME, impact mesurable.</div>
+    </div>
+  </div>
+
+  <div class="note-box" style="margin-top:4mm;">
+    <strong>Montant demandé : 300 000 MAD</strong> — Financement d'un plan d'accélération de 90 jours pour atteindre 350–400 commerces actifs, seuil de viabilité opérationnelle démontré (voir Chapitre 5).
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 3: EXECUTIVE SUMMARY ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">01</span>
+      <span class="page-number">Résumé Exécutif</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Résumé Exécutif</div>
+  <div class="page-subtitle">Plateforme de livraison B2B · Tanger · Maroc</div>
+
+  <div class="card-grid card-grid-2" style="margin-bottom:4mm;">
+    <div class="card card-primary">
+      <div class="stat-value">300 000</div>
+      <div class="stat-label">MAD Sollicités</div>
+      <div class="stat-sub">36 mois · 7% · 9 263 MAD/mois</div>
+    </div>
+    <div class="card card-accent">
+      <div class="stat-value">350–400</div>
+      <div class="stat-label">Commerces actifs cible M3</div>
+      <div class="stat-sub">Depuis 90 commerces (soft-launch)</div>
+    </div>
+  </div>
+
+  <div class="card-grid card-grid-4">
+    <div class="card">
+      <div class="stat-value" style="font-size:16px;color:var(--primary)">22 MAD</div>
+      <div class="stat-label">Prix moy./livraison</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="font-size:16px;color:var(--accent-dark)">5,2 MAD</div>
+      <div class="stat-label">Marge contribution</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="font-size:16px;color:var(--success)">800</div>
+      <div class="stat-label">Livraisons/jour M3</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="font-size:16px;color:var(--warning)">55</div>
+      <div class="stat-label">Riders actifs/jour M3</div>
+    </div>
+  </div>
+
+  <div class="section-title">Proposition</div>
+  <p><strong>THE 1000</strong> est une plateforme de livraison B2B à Tanger qui connecte des commerces locaux (pharmacies, cafés, dark stores, épiceries, boutiques) à des riders <strong>Auto-Entrepreneurs (AE)</strong> en tant que prestataires indépendants.</p>
+
+  <div class="section-title">Pourquoi maintenant</div>
+  <ul>
+    <li>90 commerces valident le produit, mais la viabilité exige <strong>15+ livraisons/rider/jour</strong></li>
+    <li>Le palier de soutenabilité est autour de <strong>400 commerces en 3 mois</strong></li>
+    <li>Le financement de 300 000 MAD permet d'exécuter ce passage critique</li>
+  </ul>
+
+  <div class="section-title">Traction cible à 3 mois</div>
+  <table>
+    <thead><tr><th>KPI</th><th>Soft-launch (actuel)</th><th>Cible M3</th></tr></thead>
+    <tbody>
+      <tr><td>Commerces actifs</td><td>~90</td><td><strong>350–400</strong></td></tr>
+      <tr><td>Livraisons/jour</td><td>~108 (à 1,2 liv./commerce)</td><td><strong>650–800</strong></td></tr>
+      <tr><td>Riders actifs/jour</td><td>7–12</td><td><strong>45–55</strong></td></tr>
+      <tr><td>Taux de succès livraison</td><td>À mesurer</td><td><strong>≥ 95%</strong></td></tr>
+      <tr><td>Délai médian pickup→dropoff</td><td>À mesurer</td><td><strong>≤ 35 min</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Jalons d'exécution (90 jours)</div>
+  <div class="milestone-grid">
+    <div class="milestone-card milestone-m1">
+      <div class="milestone-header">Mois 1 — Validation</div>
+      <div class="milestone-body">
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Commerces</span><span class="milestone-kpi-value">90–120</span></div>
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Livraisons/jour</span><span class="milestone-kpi-value">100–150</span></div>
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Budget cumulé</span><span class="milestone-kpi-value">120 000 MAD</span></div>
+      </div>
+    </div>
+    <div class="milestone-card milestone-m2">
+      <div class="milestone-header">Mois 2 — Densification</div>
+      <div class="milestone-body">
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Commerces</span><span class="milestone-kpi-value">200–250</span></div>
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Livraisons/jour</span><span class="milestone-kpi-value">320–450</span></div>
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Budget cumulé</span><span class="milestone-kpi-value">230 000 MAD</span></div>
+      </div>
+    </div>
+    <div class="milestone-card milestone-m3">
+      <div class="milestone-header">Mois 3 — Viabilité</div>
+      <div class="milestone-body">
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Commerces</span><span class="milestone-kpi-value">350–400</span></div>
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Livraisons/jour</span><span class="milestone-kpi-value">650–800</span></div>
+        <div class="milestone-kpi"><span class="milestone-kpi-label">Budget total</span><span class="milestone-kpi-value">300 000 MAD</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 4: PROBLEM & PROOF ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">02</span>
+      <span class="page-number">Problème & Preuves</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Problème & Preuves</div>
+  <div class="page-subtitle">Contexte Tanger — Marché sous-digitisé</div>
+
+  <div class="card-grid card-grid-2">
+    <div class="card" style="border-left:4px solid var(--danger);">
+      <div class="section-title" style="margin-top:0;">Problèmes actuels</div>
+      <ul>
+        <li><strong>Délais instables</strong> — forte variabilité selon heure/zone</li>
+        <li><strong>Visibilité faible</strong> sur le statut des commandes</li>
+        <li><strong>Gestion artisanale</strong> (appels, WhatsApp, absence de traçabilité)</li>
+        <li><strong>Pas de KPI consolidés</strong> par commerce/rider</li>
+        <li>Perte de ventes + expérience client dégradée</li>
+      </ul>
+    </div>
+    <div class="card" style="border-left:4px solid var(--success);">
+      <div class="section-title" style="margin-top:0;">Pourquoi Tanger</div>
+      <ul>
+        <li>Densité urbaine propice à la livraison courte distance</li>
+        <li>Tissu important de PME/commerces de proximité</li>
+        <li>Besoin intra-ville récurrent et quotidien</li>
+        <li>Potentiel de formalisation riders via statut AE</li>
+        <li>Marché local sous-digitisé à saisir</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title">Gap actuel : 90 vs 400 commerces</div>
+  <div class="note-box">
+    <strong>90 commerces = palier de test insuffisant.</strong> Le modèle devient structurellement solide autour de <strong>~400 commerces actifs en 3 mois</strong>. Seuil opérationnel rider : <strong>15+ livraisons/jour</strong>.
+  </div>
+
+  <div class="section-title">Checklist de preuves (à compléter avant dépôt)</div>
+  <table>
+    <thead><tr><th>Bloc</th><th>Pièce attendue</th><th>Statut</th></tr></thead>
+    <tbody>
+      <tr><td>Besoin marché</td><td>3 témoignages commerces (formats courts)</td><td style="color:var(--warning);font-weight:600;">À compléter</td></tr>
+      <tr><td>Besoin marché</td><td>1 tableau incidents logistiques avant THE 1000</td><td style="color:var(--warning);font-weight:600;">À compléter</td></tr>
+      <tr><td>Produit</td><td>8–12 captures d'écran réelles de la plateforme</td><td style="color:var(--warning);font-weight:600;">À compléter</td></tr>
+      <tr><td>Opérations</td><td>Fichier KPI sur 20 livraisons réelles</td><td style="color:var(--warning);font-weight:600;">À compléter</td></tr>
+      <tr><td>Finance</td><td>Validation hypothèse prix moyen/livraison</td><td style="color:var(--warning);font-weight:600;">À compléter</td></tr>
+      <tr><td>Légal</td><td>Contrat Business signé (modèle → version juridique)</td><td style="color:var(--warning);font-weight:600;">À compléter</td></tr>
+      <tr><td>Légal</td><td>Contrat Rider AE signé (modèle → version juridique)</td><td style="color:var(--warning);font-weight:600;">À compléter</td></tr>
+      <tr><td>Risque</td><td>Procédure incident/cash/COD documentée</td><td style="color:var(--warning);font-weight:600;">À compléter</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Trame témoignages (à insérer)</div>
+  <div class="card-grid card-grid-3">
+    <div class="card" style="border-top:3px solid var(--primary);">
+      <div style="font-weight:700;font-size:10px;color:var(--primary);margin-bottom:4px;">Pharmacie</div>
+      <div style="font-size:9.5px;color:var(--gray-500);">Problème initial : ___<br>Délai moyen avant : ___<br>Résultat après 2 semaines : ___</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--accent);">
+      <div style="font-weight:700;font-size:10px;color:var(--accent-dark);margin-bottom:4px;">Café/Restaurant</div>
+      <div style="font-size:9.5px;color:var(--gray-500);">Problème initial : ___<br>Volume quotidien : ___<br>Impact observé : ___</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--success);">
+      <div style="font-weight:700;font-size:10px;color:var(--success);margin-bottom:4px;">Commerce de détail</div>
+      <div style="font-size:9.5px;color:var(--gray-500);">Problème initial : ___<br>Taux de livraison : ___<br>Satisfaction client : ___</div>
+    </div>
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 5: SOLUTION ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">03</span>
+      <span class="page-number">Solution Produit</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Solution Produit</div>
+  <div class="page-subtitle">Plateforme multi-portails — Tanger, livraison intra-ville temps réel</div>
+
+  <div class="card-grid card-grid-3">
+    <div class="card card-primary">
+      <div style="font-size:18px;margin-bottom:4px;">🛡️</div>
+      <div class="stat-label">Portail Admin</div>
+      <div style="font-size:9.5px;margin-top:4px;opacity:0.85;">Supervision globale, carte live riders/livraisons, pilotage business/riders</div>
+    </div>
+    <div class="card card-accent">
+      <div style="font-size:18px;margin-bottom:4px;">🏪</div>
+      <div class="stat-label">Portail Business</div>
+      <div style="font-size:9.5px;margin-top:4px;opacity:0.85;">Création de livraison, suivi live, gestion abonnement/wallet</div>
+    </div>
+    <div class="card card-success">
+      <div style="font-size:18px;margin-bottom:4px;">🛵</div>
+      <div class="stat-label">Portail Rider</div>
+      <div style="font-size:9.5px;margin-top:4px;opacity:0.85;">Réception d'offres, exécution de mission, preuve de livraison OTP</div>
+    </div>
+  </div>
+
+  <div class="section-title">Routes produit réelles</div>
+  <table>
+    <thead><tr><th>Écran</th><th>URL</th><th>Fichier source</th></tr></thead>
+    <tbody>
+      <tr><td>Landing / choix portail</td><td>localhost:3000/</td><td>app/page.tsx</td></tr>
+      <tr><td>Dashboard Admin</td><td>localhost:3000/admin/dashboard</td><td>app/admin/dashboard/page.tsx</td></tr>
+      <tr><td>Dashboard Business</td><td>localhost:3000/business/dashboard</td><td>app/business/dashboard/page.tsx</td></tr>
+      <tr><td>Dashboard Rider</td><td>localhost:3000/rider/dashboard</td><td>app/rider/dashboard/page.tsx</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Slots captures d'écran (à produire)</div>
+  <table>
+    <thead><tr><th>Slot</th><th>Fichier attendu</th><th>URL</th><th>Utilisation dossier</th></tr></thead>
+    <tbody>
+      <tr><td>S01</td><td>S01_home_portals.png</td><td>/</td><td>Vision produit / multi-portails</td></tr>
+      <tr><td>S03</td><td>S03_admin_dashboard_map.png</td><td>/admin/dashboard</td><td>Supervision live</td></tr>
+      <tr><td>S07</td><td>S07_business_create_delivery.png</td><td>/business/dashboard</td><td>Création commande</td></tr>
+      <tr><td>S08</td><td>S08_business_live_map.png</td><td>/business/dashboard</td><td>Suivi riders en direct</td></tr>
+      <tr><td>S09</td><td>S09_business_wallet.png</td><td>/business/dashboard</td><td>Monétisation</td></tr>
+      <tr><td>S11</td><td>S11_rider_offers.png</td><td>/rider/dashboard</td><td>Dispatch et offres</td></tr>
+      <tr><td>S12</td><td>S12_rider_proof.png</td><td>/rider/dashboard</td><td>OTP / preuve livraison</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Valeur apportée par le produit</div>
+  <div class="card-grid card-grid-2">
+    <div class="card">
+      <ul>
+        <li>↓ Frictions de coordination commerce / rider</li>
+        <li>Suivi live pour réduire appels/suivi manuel</li>
+      </ul>
+    </div>
+    <div class="card">
+      <ul>
+        <li>Données exploitables (temps, taux de succès, productivité rider)</li>
+        <li>Socle de contrôle admin pour banque/investisseur/subvention</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 6: OPERATIONS ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">04</span>
+      <span class="page-number">Opérations & Workflow</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Opérations & Workflow E2E</div>
+  <div class="page-subtitle">Flux standard de bout en bout — Processus anti-échec</div>
+
+  <div class="section-title">Flux standard (E2E)</div>
+  <div class="flow" style="margin-bottom:4mm;">
+    <div class="flow-step">1. Business crée commande</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">2. Dispatch automatique</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">3. Rider accepte &lt;90s</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">4. Pickup</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">5. Transit</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">6. OTP/Preuve photo</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">7. Livrée + Clôture</div>
+  </div>
+
+  <div class="section-title">Process anti-échec (failure-proof fallback)</div>
+  <div class="card-grid card-grid-2">
+    <div class="card">
+      <div style="font-weight:700;font-size:10px;color:var(--danger);margin-bottom:4px;">A. Aucun rider disponible</div>
+      <ul style="font-size:9.5px;">
+        <li>Re-offer automatique en boucle courte</li>
+        <li>Escalade admin à T+3 min</li>
+        <li>Choix admin : reassignation, report ou annulation tracée</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:10px;color:var(--warning);margin-bottom:4px;">B. Rider absent au pickup</div>
+      <ul style="font-size:9.5px;">
+        <li>Timeout pickup (ex: 10 min)</li>
+        <li>Réallocation immédiate au rider suivant</li>
+        <li>Tag incident pour scoring qualité rider</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:10px;color:var(--primary);margin-bottom:4px;">C. Échec OTP/Preuve livraison</div>
+      <ul style="font-size:9.5px;">
+        <li>Tentative OTP n°2</li>
+        <li>Validation admin sur preuve alternative (photo + appel)</li>
+        <li>Tous les overrides journalisés (audit)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:10px;color:var(--accent-dark);margin-bottom:4px;">D. Gestion COD (si active)</div>
+      <ul style="font-size:9.5px;">
+        <li>Encaissement tracé par delivery ID</li>
+        <li>Remise codifiée fin de shift (ticket + signature)</li>
+        <li>Réconciliation quotidienne admin</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title">KPI opérationnels obligatoires (cibles M3)</div>
+  <table>
+    <thead><tr><th>KPI</th><th>Cible M3</th></tr></thead>
+    <tbody>
+      <tr><td>Temps création → acceptation</td><td><strong>≤ 3 min</strong></td></tr>
+      <tr><td>Temps pickup → dropoff médian</td><td><strong>≤ 35 min</strong></td></tr>
+      <tr><td>Taux de succès livraison</td><td><strong>≥ 95%</strong></td></tr>
+      <tr><td>Taux annulation</td><td><strong>≤ 5%</strong></td></tr>
+      <tr><td>Livraisons par rider actif/jour</td><td><strong>≥ 15</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Contrôle interne (angle banque)</div>
+  <div class="kpi-list">
+    <div class="kpi-pill">🔐 <span class="kpi-pill-value">Séparation des rôles</span> Business / Rider / Admin</div>
+    <div class="kpi-pill">📋 <span class="kpi-pill-value">Journalisation</span> actions critiques</div>
+    <div class="kpi-pill">📊 <span class="kpi-pill-value">Monitoring quotidien</span> volume, incidents, cash</div>
+    <div class="kpi-pill">🔄 <span class="kpi-pill-value">Plan de continuité</span> mode dégradé + réconciliation</div>
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 7: UNIT ECONOMICS ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">05</span>
+      <span class="page-number">Unit Economics</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Unit Economics & Seuil de Viabilité</div>
+  <div class="page-subtitle">Hypothèses conservatrices · Démonstration du palier soutenable</div>
+
+  <div class="card-grid card-grid-4">
+    <div class="card card-primary">
+      <div class="stat-value">22 MAD</div>
+      <div class="stat-label">Prix moy./livraison</div>
+    </div>
+    <div class="card" style="background:#FEF3C7;border-color:#FCD34D;">
+      <div class="stat-value" style="color:#92400E;">15 MAD</div>
+      <div class="stat-label" style="color:#92400E;">Commission rider</div>
+    </div>
+    <div class="card" style="background:#FEE2E2;border-color:#FCA5A5;">
+      <div class="stat-value" style="color:#991B1B;">1,8 MAD</div>
+      <div class="stat-label" style="color:#991B1B;">Coûts variables</div>
+    </div>
+    <div class="card card-success">
+      <div class="stat-value">5,2 MAD</div>
+      <div class="stat-label">Marge contribution</div>
+    </div>
+  </div>
+
+  <div class="section-title">Seuil rider — Viabilité individuelle (à 15 liv./jour)</div>
+  <div class="card-grid card-grid-3">
+    <div class="card" style="text-align:center;">
+      <div class="stat-value" style="font-size:18px;color:var(--primary)">225 MAD</div>
+      <div class="stat-label">Revenu brut/jour</div>
+      <div class="stat-sub">15 livraisons × 15 MAD</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="stat-value" style="font-size:18px;color:var(--accent-dark)">5 850 MAD</div>
+      <div class="stat-label">Revenu brut/mois</div>
+      <div class="stat-sub">× 26 jours opérationnels</div>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div class="stat-value" style="font-size:18px;color:var(--success)">~4 550 MAD</div>
+      <div class="stat-label">Revenu net AE</div>
+      <div class="stat-sub">après ~1 300 MAD frais opér.</div>
+    </div>
+  </div>
+
+  <div class="section-title">Comparatif 90 vs 400 commerces</div>
+  <table>
+    <thead><tr><th>KPI</th><th>90 commerces (test)</th><th>400 commerces (soutenable)</th></tr></thead>
+    <tbody>
+      <tr><td>Livraisons/jour</td><td>108</td><td><strong>800</strong></td></tr>
+      <tr><td>Livraisons/mois</td><td>2 808</td><td><strong>20 800</strong></td></tr>
+      <tr><td>Riders actifs/jour requis</td><td>7,2</td><td><strong>53,3</strong></td></tr>
+      <tr><td>CA mensuel</td><td>61 776 MAD</td><td><strong>457 600 MAD</strong></td></tr>
+      <tr><td>Commission riders</td><td>42 120 MAD</td><td>312 000 MAD</td></tr>
+      <tr><td>Coûts variables</td><td>5 054 MAD</td><td>37 440 MAD</td></tr>
+      <tr><td>Marge de contribution</td><td>14 602 MAD</td><td><strong>108 160 MAD</strong></td></tr>
+      <tr class="highlight-row"><td><strong>EBITDA après fixes (95k)</strong></td><td style="color:var(--danger);"><strong>-80 398 MAD ❌</strong></td><td style="color:var(--success);"><strong>+13 160 MAD ✅</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Seuil de rentabilité</div>
+  <div class="note-box">
+    <strong>Break-even = 95 000 / 5,2 = 18 269 livraisons/mois</strong><br>
+    Équivalent : 703 livraisons/jour → <strong>~352 commerces actifs</strong> (à 2,0 liv./commerce/jour)<br>
+    Coûts fixes mensuels (phase M3) : <strong>95 000 MAD</strong> — Team, ops, outils, admin
+  </div>
+
+  <div class="audience-grid" style="margin-top:3mm;">
+    <div class="audience-box audience-bank">
+      <div class="audience-title">🏦 Banque</div>
+      <div class="audience-text">Palier 400 commerces permet de couvrir la mensualité. Pilotage hebdomadaire du break-even (livraisons/jour, marge, incidents).</div>
+    </div>
+    <div class="audience-box audience-investor">
+      <div class="audience-title">📈 Investisseur</div>
+      <div class="audience-text">Levier : densité commerciale + utilisation rider. KPI clé : marge contribution totale et rétention M+1.</div>
+    </div>
+    <div class="audience-box audience-grant">
+      <div class="audience-title">🏛️ Subvention</div>
+      <div class="audience-text">Revenus AE mieux stabilisés via volume journalier soutenu. Digitalisation mesurable des flux PME.</div>
+    </div>
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 8: GO-TO-MARKET ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">06</span>
+      <span class="page-number">Go-To-Market</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Go-To-Market — Plan 3 Mois</div>
+  <div class="page-subtitle">Objectif : 90 → 350–400 commerces actifs en 90 jours · Tanger</div>
+
+  <div class="section-title">Cibles mensuelles</div>
+  <table>
+    <thead><tr><th>Période</th><th>Commerces actifs</th><th>Livraisons/jour</th><th>Riders actifs/jour</th></tr></thead>
+    <tbody>
+      <tr><td>Mois 1</td><td>90–120</td><td>100–150</td><td>10–15</td></tr>
+      <tr><td>Mois 2</td><td>200–250</td><td>320–450</td><td>22–32</td></tr>
+      <tr class="highlight-row"><td><strong>Mois 3</strong></td><td><strong>350–400</strong></td><td><strong>650–800</strong></td><td><strong>45–55</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Quotas quotidiens équipe commerciale (3 terrain + 1 inside)</div>
+  <table>
+    <thead><tr><th>Activité</th><th>Quota journalier équipe</th><th>Cible conversion</th></tr></thead>
+    <tbody>
+      <tr><td>Visites terrain</td><td>35</td><td>—</td></tr>
+      <tr><td>Démos produit en point de vente</td><td>12</td><td>—</td></tr>
+      <tr><td>Propositions envoyées</td><td>10</td><td>—</td></tr>
+      <tr><td>Contrats signés</td><td>4</td><td>40% des propositions</td></tr>
+      <tr class="highlight-row"><td><strong>Commerces activés (1ère commande)</strong></td><td><strong>3</strong></td><td><strong>75% des signés</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Plan de zones Tanger</div>
+  <table>
+    <thead><tr><th>Zone</th><th>Quartiers cibles</th><th>M1</th><th>M2</th><th>M3</th></tr></thead>
+    <tbody>
+      <tr class="zone-high"><td>Z1</td><td>Centre-ville, Iberia, Drissia</td><td>Haute</td><td>Haute</td><td>Haute</td></tr>
+      <tr class="zone-high"><td>Z2</td><td>Malabata, Corniche, Marshan</td><td>Haute</td><td>Haute</td><td>Moyenne</td></tr>
+      <tr class="zone-med"><td>Z3</td><td>Mghogha, Branes</td><td>Moyenne</td><td>Haute</td><td>Haute</td></tr>
+      <tr class="zone-med"><td>Z4</td><td>Beni Makada</td><td>Moyenne</td><td>Haute</td><td>Haute</td></tr>
+      <tr class="zone-low"><td>Z5</td><td>Gzenaya, Zone franche</td><td>Basse</td><td>Moyenne</td><td>Haute</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Playbook riders AE</div>
+  <table>
+    <thead><tr><th>Période</th><th>Riders AE onboardés (cumulés)</th><th>Riders actifs/jour</th></tr></thead>
+    <tbody>
+      <tr><td>Mois 1</td><td>25</td><td>10–15</td></tr>
+      <tr><td>Mois 2</td><td>45</td><td>22–32</td></tr>
+      <tr class="highlight-row"><td><strong>Mois 3</strong></td><td><strong>70</strong></td><td><strong>45–55</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Indicateurs hebdomadaires obligatoires</div>
+  <div class="kpi-list">
+    <div class="kpi-pill">📈 <span class="kpi-pill-value">Commerces signés</span> (hebdo)</div>
+    <div class="kpi-pill">✅ <span class="kpi-pill-value">Commerces actifs</span> (hebdo)</div>
+    <div class="kpi-pill">📦 <span class="kpi-pill-value">Livraisons/jour</span> moy. 7 jours</div>
+    <div class="kpi-pill">🛵 <span class="kpi-pill-value">Livraisons/rider</span> actif/jour</div>
+    <div class="kpi-pill">⏱️ <span class="kpi-pill-value">Délai médian</span> pickup→dropoff</div>
+    <div class="kpi-pill">🎯 <span class="kpi-pill-value">Taux succès</span> 1ère tentative</div>
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 9: FINANCIAL MODEL ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">07</span>
+      <span class="page-number">Modèle Financier</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Modèle Financier — Hypothèses 24 Mois</div>
+  <div class="page-subtitle">Rampe de croissance · Scénarios · Capacité de remboursement</div>
+
+  <div class="section-title">Paramètres de base</div>
+  <div class="card-grid card-grid-4">
+    <div class="card"><div class="stat-value" style="font-size:15px;color:var(--primary)">26j</div><div class="stat-label">Jours opérat./mois</div></div>
+    <div class="card"><div class="stat-value" style="font-size:15px;color:var(--accent-dark)">22 MAD</div><div class="stat-label">Prix moy./livraison</div></div>
+    <div class="card"><div class="stat-value" style="font-size:15px;color:var(--success)">5,2 MAD</div><div class="stat-label">Marge contribution</div></div>
+    <div class="card"><div class="stat-value" style="font-size:15px;color:var(--warning)">2%</div><div class="stat-label">Churn mensuel (base)</div></div>
+  </div>
+
+  <div class="section-title">Rampe base M1 → M24</div>
+  <table>
+    <thead><tr><th>Mois</th><th>Commerces</th><th>Livraisons/mois</th><th>CA mensuel</th><th>Coûts fixes</th><th>EBITDA estimé</th></tr></thead>
+    <tbody>
+      <tr><td>M1</td><td>100</td><td>3 120</td><td>68 640 MAD</td><td>85 000 MAD</td><td style="color:var(--danger);">-68 776 MAD</td></tr>
+      <tr class="highlight-row"><td><strong>M3</strong></td><td><strong>380</strong></td><td><strong>18 772</strong></td><td><strong>412 984 MAD</strong></td><td><strong>95 000 MAD</strong></td><td style="color:var(--success);"><strong>+2 614 MAD ✅</strong></td></tr>
+      <tr><td>M6</td><td>520</td><td>27 040</td><td>594 880 MAD</td><td>110 000 MAD</td><td style="color:var(--success);">+30 608 MAD</td></tr>
+      <tr><td>M12</td><td>760</td><td>41 496</td><td>912 912 MAD</td><td>130 000 MAD</td><td style="color:var(--success);">+85 779 MAD</td></tr>
+      <tr><td>M24</td><td>1 000</td><td>57 200</td><td>1 258 400 MAD</td><td>150 000 MAD</td><td style="color:var(--success);">+147 440 MAD</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Scénarios M24</div>
+  <div class="scenario-grid">
+    <div class="card scenario-prudent">
+      <div style="font-weight:700;color:var(--warning);font-size:11px;margin-bottom:4px;">⚠️ Prudent</div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">Commerces</span><span class="milestone-kpi-value" style="color:var(--warning);">700</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">CA mensuel</span><span class="milestone-kpi-value">720 720 MAD</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">Coûts fixes</span><span class="milestone-kpi-value">120 000 MAD</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">EBITDA/mois</span><span class="milestone-kpi-value" style="color:var(--success);">+50 352 MAD</span></div>
+    </div>
+    <div class="card scenario-base" style="border-top:4px solid var(--primary);">
+      <div style="font-weight:700;color:var(--primary);font-size:11px;margin-bottom:4px;">📊 Base</div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">Commerces</span><span class="milestone-kpi-value" style="color:var(--primary);">1 000</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">CA mensuel</span><span class="milestone-kpi-value">1 258 400 MAD</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">Coûts fixes</span><span class="milestone-kpi-value">150 000 MAD</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">EBITDA/mois</span><span class="milestone-kpi-value" style="color:var(--success);">+147 440 MAD</span></div>
+    </div>
+    <div class="card scenario-agressif" style="border-top:4px solid var(--success);">
+      <div style="font-weight:700;color:var(--success);font-size:11px;margin-bottom:4px;">🚀 Agressif</div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">Commerces</span><span class="milestone-kpi-value" style="color:var(--success);">1 300</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">CA mensuel</span><span class="milestone-kpi-value">1 859 000 MAD</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">Coûts fixes</span><span class="milestone-kpi-value">180 000 MAD</span></div>
+      <div class="milestone-kpi"><span class="milestone-kpi-label">EBITDA/mois</span><span class="milestone-kpi-value" style="color:var(--success);">+259 400 MAD</span></div>
+    </div>
+  </div>
+
+  <div class="section-title">Hypothèse de financement bancaire</div>
+  <div class="note-box">
+    <strong>300 000 MAD · 36 mois · 7%</strong> → Mensualité indicative : <strong>9 263 MAD</strong><br>
+    À 400 commerces+ : marge opérationnelle couvre la mensualité avec buffer. Discipline imposée : réserve ≥ 2 mensualités + suivi hebdo KPI cash.
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 10: USE OF FUNDS ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">08</span>
+      <span class="page-number">Utilisation des Fonds</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Utilisation des Fonds — 300 000 MAD</div>
+  <div class="page-subtitle">Allocation par poste · Décaissement par jalons · Lien dépenses→résultats</div>
+
+  <div class="section-title">Allocation détaillée</div>
+
+  <div style="margin: 2mm 0 4mm 0;">
+    <div class="budget-item">
+      <div class="budget-label">Acquisition commerciale B2B</div>
+      <div class="budget-bar-wrap"><div class="progress-bar-container"><div class="progress-bar" style="width:32%;background:linear-gradient(90deg,#4F46E5,#7C3AED);"></div></div></div>
+      <div class="budget-amount">96 000 MAD</div>
+      <div class="budget-pct">32%</div>
+    </div>
+    <div class="budget-item">
+      <div class="budget-label">Produit & fiabilité techno</div>
+      <div class="budget-bar-wrap"><div class="progress-bar-container"><div class="progress-bar" style="width:24%;background:linear-gradient(90deg,#06B6D4,#0891B2);"></div></div></div>
+      <div class="budget-amount">72 000 MAD</div>
+      <div class="budget-pct">24%</div>
+    </div>
+    <div class="budget-item">
+      <div class="budget-label">Opérations riders AE</div>
+      <div class="budget-bar-wrap"><div class="progress-bar-container"><div class="progress-bar" style="width:19%;background:linear-gradient(90deg,#10B981,#059669);"></div></div></div>
+      <div class="budget-amount">58 000 MAD</div>
+      <div class="budget-pct">19%</div>
+    </div>
+    <div class="budget-item">
+      <div class="budget-label">Fonds de roulement / buffer risque</div>
+      <div class="budget-bar-wrap"><div class="progress-bar-container"><div class="progress-bar" style="width:11%;background:linear-gradient(90deg,#F59E0B,#D97706);"></div></div></div>
+      <div class="budget-amount">34 000 MAD</div>
+      <div class="budget-pct">11%</div>
+    </div>
+    <div class="budget-item">
+      <div class="budget-label">Juridique, conformité, assurance</div>
+      <div class="budget-bar-wrap"><div class="progress-bar-container"><div class="progress-bar" style="width:9%;background:linear-gradient(90deg,#EF4444,#DC2626);"></div></div></div>
+      <div class="budget-amount">28 000 MAD</div>
+      <div class="budget-pct">9%</div>
+    </div>
+    <div class="budget-item">
+      <div class="budget-label">Reporting finance & gouvernance</div>
+      <div class="budget-bar-wrap"><div class="progress-bar-container"><div class="progress-bar" style="width:4%;background:linear-gradient(90deg,#8B5CF6,#7C3AED);"></div></div></div>
+      <div class="budget-amount">12 000 MAD</div>
+      <div class="budget-pct">4%</div>
+    </div>
+  </div>
+
+  <div class="section-title">Décaissement par jalons</div>
+  <table>
+    <thead><tr><th>Jalons</th><th>Budget cumulé</th><th>Conditions de passage</th><th>Livrables</th></tr></thead>
+    <tbody>
+      <tr><td>J0 → S4 (M1)</td><td>120 000 MAD</td><td>90–120 commerces actifs</td><td>Pack produit stable + protocole KPI pilote</td></tr>
+      <tr><td>S5 → S8 (M2)</td><td>230 000 MAD</td><td>200–250 commerces actifs</td><td>Cadence commerciale industrialisée + SLA stabilisés</td></tr>
+      <tr class="highlight-row"><td><strong>S9 → S12 (M3)</strong></td><td><strong>300 000 MAD</strong></td><td><strong>350–400 commerces actifs</strong></td><td><strong>Viabilité riders + gouvernance complète</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Lien dépenses → résultats mesurables</div>
+  <table>
+    <thead><tr><th>Dépense</th><th>KPI de preuve</th></tr></thead>
+    <tbody>
+      <tr><td>Acquisition B2B</td><td>Nb commerces signés, actifs, rétention M+1</td></tr>
+      <tr><td>Ops riders AE</td><td>Livraisons/rider/jour, taux disponibilité, taux acceptation</td></tr>
+      <tr><td>Produit</td><td>Délai médian, uptime, taux d'erreur, temps de dispatch</td></tr>
+      <tr><td>Conformité</td><td>Contrats signés, incidents légaux = 0, audits tracés</td></tr>
+      <tr><td>Buffer risque</td><td>Continuités de service en cas incident</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note-box" style="margin-top:3mm;">
+    <strong>Note banque :</strong> Trigger management activé si livraisons/jour &lt; seuil 2 semaines → gel dépenses non essentielles. Réserve maintenue ≥ 2 mensualités. Reporting mensuel standardisé transmis au financeur.
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 11: RISK & COMPLIANCE ========== -->
+<div class="page content-page">
+  <div class="page-header">
+    <div class="page-header-left">
+      <span class="section-tag">09</span>
+      <span class="page-number">Risques & Conformité</span>
+    </div>
+    <span class="page-number">Confidentiel · THE 1000</span>
+  </div>
+
+  <div class="page-title">Risques, Conformité & Gouvernance</div>
+  <div class="page-subtitle">Statut riders AE · Matrice de risques · Contrôle interne</div>
+
+  <div class="section-title">Statut riders — Principe non-négociable</div>
+  <div class="card-grid card-grid-2" style="margin-bottom:3mm;">
+    <div class="card" style="border-left:4px solid var(--primary);">
+      <div style="font-weight:700;font-size:10px;margin-bottom:4px;">✅ Ce que les riders SONT</div>
+      <ul style="font-size:9.5px;">
+        <li>Auto-Entrepreneurs indépendants</li>
+        <li>Prestataires selon missions réalisées</li>
+        <li>Liberté d'organisation (dans SLA acceptés)</li>
+        <li>Facturation selon prestations</li>
+      </ul>
+    </div>
+    <div class="card" style="border-left:4px solid var(--danger);">
+      <div style="font-weight:700;font-size:10px;margin-bottom:4px;color:var(--danger);">❌ Ce que les riders NE SONT PAS</div>
+      <ul style="font-size:9.5px;">
+        <li>Pas employés de THE 1000</li>
+        <li>Pas de lien de subordination salariale</li>
+        <li>Pas d'horaires imposés (type contrat travail)</li>
+        <li>Pas de couverture sociale directe THE 1000</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title">Matrice de risques</div>
+  <table>
+    <thead><tr><th>Risque</th><th>Proba.</th><th>Impact</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Requalification rider en salarié</td><td class="risk-med">Moyen</td><td class="risk-high">Élevé</td><td>Contrat AE robuste, process cohérent avec indépendance</td></tr>
+      <tr><td>Accident / dommage en course</td><td class="risk-med">Moyen</td><td class="risk-high">Élevé</td><td>Assurance RC pro, procédure incident, preuves mission</td></tr>
+      <tr><td>Retard systématique livraisons</td><td class="risk-med">Moyen</td><td class="risk-high">Élevé</td><td>Pilotage SLA par zone, backup dispatch, escalation admin</td></tr>
+      <tr><td>Incident données personnelles</td><td class="risk-low">Faible</td><td class="risk-high">Élevé</td><td>Contrôle accès role-based, minimisation données</td></tr>
+      <tr><td>Fraude cash/COD</td><td class="risk-med">Moyen</td><td class="risk-med">Moyen-Élevé</td><td>Réconciliation journalière, plafonds, preuves encaissement</td></tr>
+      <tr><td>Concentration sur peu de commerces</td><td class="risk-med">Moyen</td><td class="risk-med">Moyen</td><td>Diversification portefeuille clients, quotas segment</td></tr>
+      <tr><td>Interruption technique</td><td class="risk-low">Faible</td><td class="risk-med">Moyen</td><td>Plan dégradé + reprise et réconciliation</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Checklist conformité pré-financement</div>
+  <div class="card-grid card-grid-2">
+    <ul class="checklist">
+      <li><div class="check-icon check-todo">?</div><div><strong>Contrat business</strong> validé juridiquement</div></li>
+      <li><div class="check-icon check-todo">?</div><div><strong>Contrat rider AE</strong> validé juridiquement</div></li>
+      <li><div class="check-icon check-todo">?</div><div><strong>Politique data</strong> interne formalisée</div></li>
+    </ul>
+    <ul class="checklist">
+      <li><div class="check-icon check-todo">?</div><div><strong>Procédure incident/cash/COD</strong> écrite</div></li>
+      <li><div class="check-icon check-todo">?</div><div><strong>Assurance RC</strong> active</div></li>
+      <li><div class="check-icon check-todo">?</div><div><strong>Alignement loi 43-05</strong> (AML si COD)</div></li>
+    </ul>
+  </div>
+
+  <div class="section-title">Contrôles de gouvernance (angle banque)</div>
+  <div class="kpi-list">
+    <div class="kpi-pill">📊 <span class="kpi-pill-value">Revue hebdo</span> KPI opérations + cash</div>
+    <div class="kpi-pill">🔍 <span class="kpi-pill-value">Revue mensuelle</span> risques + incidents + plans correctifs</div>
+    <div class="kpi-pill">📁 <span class="kpi-pill-value">Dossier audit</span> contrats, logs, KPI, réconciliations</div>
+    <div class="kpi-pill">🔒 <span class="kpi-pill-value">Loi 09-08</span> CNDP Maroc · données personnelles</div>
+  </div>
+
+  <div class="watermark">Confidentiel · THE 1000</div>
+</div>
+
+<!-- ========== PAGE 12: BACK COVER ========== -->
+<div class="page cover" style="justify-content:space-between;padding:20mm;">
+  <div style="text-align:center;position:relative;width:100%;">
+    <div class="cover-logo-circle" style="margin:0 auto 16px;">
+      <span class="cover-logo-text">T1</span>
+    </div>
+    <div style="font-size:24px;font-weight:900;color:white;letter-spacing:-1px;margin-bottom:8px;">THE 1000</div>
+    <div style="font-size:12px;color:#A5B4FC;margin-bottom:30px;">Plateforme de livraison B2B urbaine · Tanger, Maroc</div>
+  </div>
+
+  <div style="text-align:center;position:relative;width:100%;">
+    <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:20px 30px;margin-bottom:20px;">
+      <div style="font-size:11px;color:#A5B4FC;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:12px;">Contact & Prochaines étapes</div>
+      <div style="font-size:13px;color:white;font-weight:600;margin-bottom:6px;">Décision de financement attendue</div>
+      <div style="font-size:11px;color:#CBD5E1;line-height:1.8;">
+        ✅ Validation ticket <strong style="color:white;">300 000 MAD</strong><br>
+        ✅ Plan 90 jours avec objectifs mesurables<br>
+        ✅ 400 commerces actifs + riders AE 15+ liv./jour<br>
+        ✅ Reporting hebdomadaire standardisé
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <span class="cover-tag">📧 Contact disponible sur demande</span>
+      <span class="cover-tag">📍 Tanger, Maroc</span>
+      <span class="cover-tag">📅 Février 2025</span>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:rgba(255,255,255,0.3);font-size:9px;letter-spacing:1px;position:relative;">
+    CONFIDENTIEL · Document préparé exclusivement pour usage de financement · Ne pas distribuer sans autorisation préalable
+  </div>
+</div>
+
+</body>
+</html>

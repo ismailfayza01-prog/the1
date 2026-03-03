@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { userService } from '@/lib/storage';
 import { BarChart3, ArrowLeft, AlertCircle } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 import Link from 'next/link';
 
 export default function AdminLoginPage() {
@@ -47,7 +48,7 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left decorative panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-slate-900">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-20 left-20 h-72 w-72 rounded-full bg-white blur-3xl" />
           <div className="absolute bottom-20 right-20 h-48 w-48 rounded-full bg-white blur-3xl" />
@@ -60,8 +61,8 @@ export default function AdminLoginPage() {
             </Link>
           </div>
           <div>
-            <div className="rounded-2xl bg-white/10 backdrop-blur p-5 w-fit mb-8">
-              <BarChart3 className="h-12 w-12 text-white" />
+            <div className="mb-8 rounded-2xl bg-white/10 backdrop-blur p-4 w-fit">
+              <BrandLogo withText={false} imageClassName="h-14 w-14 rounded-2xl" />
             </div>
             <h2 className="text-4xl font-extrabold mb-4">Admin Control Center</h2>
             <p className="text-white/70 text-lg leading-relaxed max-w-sm">
@@ -96,11 +97,9 @@ export default function AdminLoginPage() {
 
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="rounded-2xl bg-violet-100 p-3">
-                <BarChart3 className="h-7 w-7 text-violet-600" />
-              </div>
+              <BrandLogo withText={false} imageClassName="h-14 w-14 rounded-2xl shadow-sm" />
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-violet-500">Admin Portal</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600">Admin Portal</p>
                 <h1 className="text-2xl font-extrabold text-foreground">Sign In</h1>
               </div>
             </div>
@@ -117,7 +116,7 @@ export default function AdminLoginPage() {
                   placeholder="admin@the1000.ma"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 rounded-xl border-border/80 focus-visible:ring-violet-500"
+                  className="h-11 rounded-xl border-border/80 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
@@ -129,7 +128,7 @@ export default function AdminLoginPage() {
                   placeholder="Enter password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 rounded-xl border-border/80 focus-visible:ring-violet-500"
+                  className="h-11 rounded-xl border-border/80 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
@@ -143,7 +142,7 @@ export default function AdminLoginPage() {
 
               <Button
                 type="submit"
-                className="w-full h-11 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-semibold shadow-md shadow-violet-200 transition-all"
+                className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-slate-800 hover:from-emerald-600 hover:to-slate-900 text-white font-semibold shadow-md shadow-emerald-200 transition-all"
               >
                 Sign In to Dashboard
               </Button>
@@ -151,9 +150,9 @@ export default function AdminLoginPage() {
           </div>
 
           {isDev && (
-            <div className="mt-6 rounded-xl bg-violet-50 border border-violet-100 p-4 text-sm">
-              <p className="font-semibold text-violet-700 mb-1">Demo Credentials</p>
-              <p className="text-violet-600/80">admin@the1000.ma / Admin1234!</p>
+            <div className="mt-6 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm">
+              <p className="font-semibold text-emerald-700 mb-1">Demo Credentials</p>
+              <p className="text-emerald-700/80">admin@the1000.ma / Admin1234!</p>
             </div>
           )}
         </div>

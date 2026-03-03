@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { userService } from '@/lib/storage';
 import { MapPin, ArrowLeft, AlertCircle, Package, TrendingUp, Clock } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 import Link from 'next/link';
 
 export default function BusinessLoginPage() {
@@ -47,7 +48,7 @@ export default function BusinessLoginPage() {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left decorative panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-slate-900">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-20 right-20 h-72 w-72 rounded-full bg-white blur-3xl" />
           <div className="absolute bottom-20 left-20 h-48 w-48 rounded-full bg-white blur-3xl" />
@@ -60,8 +61,8 @@ export default function BusinessLoginPage() {
             </Link>
           </div>
           <div>
-            <div className="rounded-2xl bg-white/10 backdrop-blur p-5 w-fit mb-8">
-              <MapPin className="h-12 w-12 text-white" />
+            <div className="mb-8 rounded-2xl bg-white/10 backdrop-blur p-4 w-fit">
+              <BrandLogo withText={false} imageClassName="h-14 w-14 rounded-2xl" />
             </div>
             <h2 className="text-4xl font-extrabold mb-4">Business Portal</h2>
             <p className="text-white/70 text-lg leading-relaxed max-w-sm">
@@ -99,11 +100,9 @@ export default function BusinessLoginPage() {
 
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="rounded-2xl bg-sky-100 p-3">
-                <MapPin className="h-7 w-7 text-sky-600" />
-              </div>
+              <BrandLogo withText={false} imageClassName="h-14 w-14 rounded-2xl shadow-sm" />
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-sky-500">Business Portal</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600">Business Portal</p>
                 <h1 className="text-2xl font-extrabold text-foreground">Sign In</h1>
               </div>
             </div>
@@ -120,7 +119,7 @@ export default function BusinessLoginPage() {
                   placeholder="business@example.ma"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 rounded-xl border-border/80 focus-visible:ring-sky-500"
+                  className="h-11 rounded-xl border-border/80 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
@@ -132,7 +131,7 @@ export default function BusinessLoginPage() {
                   placeholder="Enter password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 rounded-xl border-border/80 focus-visible:ring-sky-500"
+                  className="h-11 rounded-xl border-border/80 focus-visible:ring-emerald-500"
                   required
                 />
               </div>
@@ -146,7 +145,7 @@ export default function BusinessLoginPage() {
 
               <Button
                 type="submit"
-                className="w-full h-11 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white font-semibold shadow-md shadow-sky-200 transition-all"
+                className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-slate-800 hover:from-emerald-600 hover:to-slate-900 text-white font-semibold shadow-md shadow-emerald-200 transition-all"
               >
                 Sign In to Portal
               </Button>
@@ -154,10 +153,10 @@ export default function BusinessLoginPage() {
           </div>
 
           {isDev && (
-            <div className="mt-6 rounded-xl bg-sky-50 border border-sky-100 p-4 text-sm">
-              <p className="font-semibold text-sky-700 mb-1">Demo Credentials</p>
-              <p className="text-sky-600/80">pharmacie@example.ma / Business1234!</p>
-              <p className="text-sky-500/60 text-xs mt-1">or cafe@example.ma / Business1234!</p>
+            <div className="mt-6 rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm">
+              <p className="font-semibold text-emerald-700 mb-1">Demo Credentials</p>
+              <p className="text-emerald-700/80">pharmacie@example.ma / Business1234!</p>
+              <p className="text-emerald-600/70 text-xs mt-1">or cafe@example.ma / Business1234!</p>
             </div>
           )}
         </div>

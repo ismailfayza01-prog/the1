@@ -200,56 +200,86 @@ $$;
 -- 6) Storage policies for delivery-pod bucket (private)
 -- Object name: "<delivery_id>/<uuid>.jpg"
 
-alter table storage.objects enable row level security;
+do $$
+begin
+  execute 'alter table storage.objects enable row level security';
+exception
+  when insufficient_privilege or undefined_table then
+    raise notice 'Skipping storage.objects RLS enable (insufficient privilege or table unavailable)';
+end $$;
 
-drop policy if exists "Rider can upload PoD photo" on storage.objects;
-create policy "Rider can upload PoD photo"
-on storage.objects for insert
-with check (
-  bucket_id = 'delivery-pod'
-  and exists (
-    select 1
-    from public.deliveries d
-    join public.riders r on r.id = d.rider_id
-    where r.user_id = auth.uid()
-      and d.status in ('accepted','picked_up','in_transit')
-      and d.id = (split_part(name, '/', 1))::uuid
-  )
-);
+do $$
+begin
+  execute $sql$
+    drop policy if exists "Rider can upload PoD photo" on storage.objects;
+    create policy "Rider can upload PoD photo"
+    on storage.objects for insert
+    with check (
+      bucket_id = 'delivery-pod'
+      and exists (
+        select 1
+        from public.deliveries d
+        join public.riders r on r.id = d.rider_id
+        where r.user_id = auth.uid()
+          and d.status in ('accepted','picked_up','in_transit')
+          and d.id = (split_part(name, '/', 1))::uuid
+      )
+    );
+  $sql$;
+exception
+  when insufficient_privilege or undefined_table then
+    raise notice 'Skipping policy "Rider can upload PoD photo"';
+end $$;
 
 -- If client uses upsert/update later, add update policy (optional):
 -- create policy "Rider can update PoD photo"
 -- on storage.objects for update
 -- using (same predicate) with check (same predicate);
 
-drop policy if exists "Rider can read own PoD photo" on storage.objects;
-create policy "Rider can read own PoD photo"
-on storage.objects for select
-using (
-  bucket_id = 'delivery-pod'
-  and exists (
-    select 1
-    from public.deliveries d
-    join public.riders r on r.id = d.rider_id
-    where r.user_id = auth.uid()
-      and d.status in ('accepted','picked_up','in_transit','delivered')
-      and d.id = (split_part(name, '/', 1))::uuid
-  )
-);
+do $$
+begin
+  execute $sql$
+    drop policy if exists "Rider can read own PoD photo" on storage.objects;
+    create policy "Rider can read own PoD photo"
+    on storage.objects for select
+    using (
+      bucket_id = 'delivery-pod'
+      and exists (
+        select 1
+        from public.deliveries d
+        join public.riders r on r.id = d.rider_id
+        where r.user_id = auth.uid()
+          and d.status in ('accepted','picked_up','in_transit','delivered')
+          and d.id = (split_part(name, '/', 1))::uuid
+      )
+    );
+  $sql$;
+exception
+  when insufficient_privilege or undefined_table then
+    raise notice 'Skipping policy "Rider can read own PoD photo"';
+end $$;
 
-drop policy if exists "Business/admin can read PoD photo" on storage.objects;
-create policy "Business/admin can read PoD photo"
-on storage.objects for select
-using (
-  bucket_id = 'delivery-pod'
-  and (
-    exists (
-      select 1
-      from public.deliveries d
-      join public.businesses b on b.id = d.business_id
-      where b.user_id = auth.uid()
-        and d.id = (split_part(name, '/', 1))::uuid
-    )
-    or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  )
-);
+do $$
+begin
+  execute $sql$
+    drop policy if exists "Business/admin can read PoD photo" on storage.objects;
+    create policy "Business/admin can read PoD photo"
+    on storage.objects for select
+    using (
+      bucket_id = 'delivery-pod'
+      and (
+        exists (
+          select 1
+          from public.deliveries d
+          join public.businesses b on b.id = d.business_id
+          where b.user_id = auth.uid()
+            and d.id = (split_part(name, '/', 1))::uuid
+        )
+        or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+      )
+    );
+  $sql$;
+exception
+  when insufficient_privilege or undefined_table then
+    raise notice 'Skipping policy "Business/admin can read PoD photo"';
+end $$;

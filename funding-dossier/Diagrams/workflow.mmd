@@ -1,0 +1,24 @@
+flowchart LR
+    A[Business: creation livraison] --> B[Dispatch automatique]
+    B --> C{Offre acceptee < 90 sec?}
+
+    C -- Oui --> D[Statut: accepted]
+    D --> E[Pickup]
+    E --> F[Statut: picked_up]
+    F --> G[Transit]
+    G --> H[OTP + preuve photo]
+    H --> I[Statut: delivered]
+    I --> J[Cloture + KPI + reporting]
+
+    C -- Non --> K[Re-offer rider suivant]
+    K --> L{Rider disponible?}
+    L -- Oui --> D
+    L -- Non --> M[Escalade admin]
+    M --> N[Assignation manuelle]
+    M --> O[Report/annulation tracee]
+
+    H --> P{Echec OTP?}
+    P -- Oui --> Q[Verification alternative admin]
+    Q --> I
+    P -- Non --> I
+

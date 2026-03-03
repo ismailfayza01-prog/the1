@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Motorcycle rider icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <circle cx="17" cy="47" r="8" fill="none" stroke="#ffffff" stroke-width="4"/>
+  <circle cx="47" cy="47" r="8" fill="none" stroke="#ffffff" stroke-width="4"/>
+  <path d="M17 47h16l6-16H27l-5 12" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 22h9l6 10" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="29" cy="18" r="4" fill="#ffffff"/>
+  <path d="M30 22l8 5" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+</svg>

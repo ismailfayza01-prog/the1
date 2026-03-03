@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The 1000 — Moroccan Geometric Luxury Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ivory: #f5efe6;
+      --cream: #faf6f0;
+      --parchment: #ede3d5;
+      --gold: #c9a84c;
+      --gold-dark: #a07830;
+      --gold-light: #e8c97a;
+      --terracotta: #c4622d;
+      --earth: #8b4513;
+      --night: #1a1035;
+      --night-mid: #2a1e50;
+      --night-glow: #4a3a7c;
+      --dark-text: #2c1810;
+      --muted: #9c8878;
+      --warm-white: #fffdf9;
+      --rider-green: #2d6a4f;
+      --rider-dark: #1a4a35;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--ivory);
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      color: var(--dark-text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, h4, h5 { font-family: 'Playfair Display', serif; line-height: 1.2; }
+
+    /* ---- Zellige pattern bg ---- */
+    .zellige-bg {
+      background-color: var(--night);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cg fill='none' stroke='rgba(201,168,76,0.2)' stroke-width='0.6'%3E%3Cpolygon points='28,3 53,28 28,53 3,28'/%3E%3Cpolygon points='28,11 45,28 28,45 11,28'/%3E%3Cline x1='28' y1='3' x2='28' y2='11'/%3E%3Cline x1='53' y1='28' x2='45' y2='28'/%3E%3Cline x1='28' y1='53' x2='28' y2='45'/%3E%3Cline x1='3' y1='28' x2='11' y2='28'/%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    /* ---- Geometric border strip ---- */
+    .geo-strip {
+      height: 10px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--gold-dark) 0px, var(--gold-dark) 10px,
+        var(--night) 10px, var(--night) 20px,
+        var(--terracotta) 20px, var(--terracotta) 30px,
+        var(--gold) 30px, var(--gold) 40px,
+        var(--night) 40px, var(--night) 50px
+      );
+    }
+
+    /* ---- Gold divider ---- */
+    .divider { display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0; }
+    .divider .line { flex: 1; height: 1px; background: linear-gradient(to right, transparent, var(--gold), transparent); }
+    .divider .gem { width: 9px; height: 9px; background: var(--gold); transform: rotate(45deg); flex-shrink: 0; }
+
+    /* ---- Section label ---- */
+    .eyebrow {
+      font-family: 'Cinzel', serif;
+      font-size: 0.65rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    /* ---- Cards ---- */
+    .card {
+      background: var(--cream);
+      border: 1px solid rgba(201,168,76,0.25);
+      padding: 1.75rem;
+      position: relative;
+    }
+    .card::before, .card::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      border-color: var(--gold); border-style: solid;
+    }
+    .card::before { top: 5px; left: 5px; border-width: 2px 0 0 2px; }
+    .card::after  { bottom: 5px; right: 5px; border-width: 0 2px 2px 0; }
+    .card:hover { box-shadow: 0 16px 48px rgba(26,16,53,0.10), 0 0 0 1px rgba(201,168,76,0.35); }
+
+    .card-top-bar { height: 3px; background: linear-gradient(90deg, var(--gold-dark), var(--gold-light), var(--gold-dark)); margin: -1.75rem -1.75rem 1.5rem; }
+
+    /* ---- Stat card ---- */
+    .stat-card {
+      background: var(--cream);
+      border: 1px solid rgba(201,168,76,0.2);
+      padding: 1.25rem 1.5rem;
+      position: relative;
+    }
+    .stat-card .gem-corner {
+      position: absolute; top: 8px; right: 8px;
+      width: 6px; height: 6px;
+      background: var(--gold); transform: rotate(45deg);
+    }
+    .stat-value { font-family: 'Playfair Display', serif; font-size: 2.4rem; font-weight: 700; color: var(--night); line-height: 1; margin: 0.4rem 0; }
+
+    /* ---- Buttons ---- */
+    .btn {
+      font-family: 'Cinzel', serif;
+      font-size: 0.68rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      padding: 0.7rem 1.75rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.25s ease;
+      display: inline-block;
+      text-align: center;
+    }
+    .btn-night { background: linear-gradient(135deg, var(--night), var(--night-mid)); color: var(--gold-light); border: 1px solid var(--gold); }
+    .btn-night:hover { background: linear-gradient(135deg, var(--night-mid), var(--night-glow)); box-shadow: 0 0 18px rgba(201,168,76,0.25); }
+    .btn-gold { background: linear-gradient(135deg, var(--gold-dark), var(--gold), var(--gold-dark)); color: var(--night); }
+    .btn-gold:hover { box-shadow: 0 4px 20px rgba(201,168,76,0.5); transform: translateY(-1px); }
+    .btn-outline { background: transparent; color: var(--night); border: 1px solid currentColor; }
+
+    /* ---- Badges ---- */
+    .badge {
+      font-family: 'Cinzel', serif;
+      font-size: 0.58rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 0.28rem 0.65rem;
+      border: 1px solid;
+      display: inline-flex; align-items: center; gap: 0.35rem;
+    }
+    .badge-available { color: var(--rider-green); background: rgba(45,106,79,0.08); border-color: rgba(45,106,79,0.3); }
+    .badge-busy      { color: var(--earth);        background: rgba(196,98,45,0.08);  border-color: rgba(196,98,45,0.3); }
+    .badge-offline   { color: var(--muted);         background: rgba(156,136,120,0.08); border-color: rgba(156,136,120,0.3); }
+    .badge-gold      { color: var(--gold-dark);     background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.5); }
+    .badge-violet    { color: #6d28d9;              background: rgba(109,40,217,0.08); border-color: rgba(109,40,217,0.3); }
+
+    /* ---- Input ---- */
+    .label { font-family: 'Cinzel', serif; font-size: 0.6rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 0.35rem; }
+    .input {
+      width: 100%; padding: 0.6rem 0.85rem;
+      background: var(--warm-white); border: 1px solid rgba(201,168,76,0.3);
+      font-family: 'Cormorant Garamond', serif; font-size: 1rem; color: var(--dark-text);
+      outline: none;
+    }
+    .input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,168,76,0.1); }
+    .input::placeholder { color: var(--muted); font-style: italic; }
+
+    /* ---- Progress ---- */
+    .progress { height: 3px; background: rgba(201,168,76,0.15); }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold-light)); }
+
+    /* ---- Nav ---- */
+    .nav {
+      background: var(--cream); border-bottom: 1px solid rgba(201,168,76,0.3);
+      padding: 0 2rem; height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand { font-family: 'Cinzel', serif; font-size: 1rem; letter-spacing: 0.3em; color: var(--night); display: flex; align-items: center; gap: 0.65rem; }
+    .nav-gem { width: 6px; height: 6px; background: var(--gold); transform: rotate(45deg); }
+
+    /* ---- Rider avatar ---- */
+    .avatar {
+      width: 36px; height: 36px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--night), var(--night-mid));
+      color: var(--gold); font-family: 'Playfair Display', serif; font-size: 0.9rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ---- Rider row ---- */
+    .rider-row { display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 0; border-bottom: 1px solid rgba(201,168,76,0.12); }
+    .rider-row:last-child { border-bottom: none; }
+
+    /* ---- Earnings card ---- */
+    .earnings {
+      background: linear-gradient(135deg, var(--night) 0%, var(--night-mid) 60%, var(--night-glow) 100%);
+      padding: 2rem; position: relative; overflow: hidden; color: var(--ivory);
+    }
+    .earnings::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cg fill='none' stroke='rgba(201,168,76,0.08)' stroke-width='0.5'%3E%3Cpolygon points='20,2 38,20 20,38 2,20'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    .earnings .inner { position: relative; z-index: 1; }
+    .earnings-amount { font-family: 'Playfair Display', serif; font-size: 2.8rem; color: var(--gold-light); line-height: 1; }
+
+    /* ---- Map placeholder ---- */
+    .map-ph {
+      background: #e8dfd0; border: 1px solid rgba(201,168,76,0.3);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 0.5rem;
+      color: var(--muted); font-family: 'Cinzel', serif;
+      font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase;
+    }
+
+    /* ---- Section preview label ---- */
+    .preview-label {
+      background: var(--parchment); text-align: center; padding: 0.65rem;
+      font-family: 'Cinzel', serif; font-size: 0.6rem; letter-spacing: 0.45em;
+      text-transform: uppercase; color: var(--muted); border-bottom: 1px solid rgba(201,168,76,0.2);
+    }
+
+    /* ---- Grid ---- */
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .g3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .g4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+
+    /* ---- Wrapper ---- */
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    section { padding: 2.5rem 2rem; }
+
+    /* ---- Timeline ---- */
+    .timeline { display: flex; align-items: flex-start; gap: 0; margin: 0.85rem 0; }
+    .tstep { flex: 1; text-align: center; position: relative; }
+    .tdot { width: 8px; height: 8px; background: var(--gold); transform: rotate(45deg); margin: 0 auto 0.3rem; }
+    .tdot.off { background: transparent; border: 1px solid rgba(201,168,76,0.35); }
+    .tline { position: absolute; top: 4px; left: 50%; width: 100%; height: 1px; background: linear-gradient(90deg, var(--gold), rgba(201,168,76,0.2)); }
+    .tstep:last-child .tline { display: none; }
+    .tlabel { font-family: 'Cinzel', serif; font-size: 0.5rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .tlabel.on { color: var(--gold-dark); }
+
+    /* ---- Toggle switch ---- */
+    .toggle { width: 46px; height: 26px; background: var(--rider-green); border-radius: 13px; position: relative; cursor: pointer; border: 1px solid rgba(45,106,79,0.4); }
+    .toggle-knob { width: 20px; height: 20px; background: white; border-radius: 50%; position: absolute; right: 3px; top: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  </style>
+</head>
+<body>
+
+<!-- Top announcement band -->
+<div style="background:var(--night);color:var(--gold);text-align:center;padding:0.55rem;font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.4em;text-transform:uppercase;">
+  ◆ Design Preview — Moroccan Geometric Luxury · The 1000 Courier ◆
+</div>
+
+<div class="wrap">
+
+  <!-- ══════════════════════════════════════════
+       SECTION 1: LANDING PAGE
+  ══════════════════════════════════════════ -->
+  <div class="preview-label">§ 1 — Landing Page</div>
+
+  <!-- Nav -->
+  <div class="nav">
+    <div class="nav-brand">
+      <div class="nav-gem"></div>THE 1000<div class="nav-gem"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:2rem;font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.15em;color:var(--muted);">
+      <span style="color:var(--gold-dark);border-bottom:1px solid var(--gold);padding-bottom:2px;">Portals</span>
+      <span>About</span>
+      <span>Contact</span>
+    </div>
+  </div>
+  <div class="geo-strip"></div>
+
+  <!-- Hero -->
+  <div class="zellige-bg" style="padding:4.5rem 2rem;text-align:center;">
+    <p class="eyebrow" style="color:rgba(201,168,76,0.65);">◆ Tangier · Morocco · Est. 2025 ◆</p>
+    <div class="divider" style="max-width:280px;margin:1rem auto;"><div class="line"></div><div class="gem" style="width:11px;height:11px;"></div><div class="line"></div></div>
+    <h1 style="font-family:'Cinzel',serif;font-size:4.8rem;font-weight:700;color:var(--ivory);letter-spacing:0.08em;line-height:1;">
+      THE <span style="color:var(--gold);">1000</span>
+    </h1>
+    <h2 style="font-family:'Playfair Display',serif;font-size:1.5rem;font-style:italic;color:rgba(245,239,230,0.65);font-weight:400;margin-top:0.4rem;">
+      Courier &amp; Delivery Platform
+    </h2>
+    <div class="divider" style="max-width:280px;margin:1.25rem auto;"><div class="line"></div><div class="gem"></div><div class="line"></div></div>
+    <p style="color:rgba(245,239,230,0.55);font-size:1.1rem;max-width:480px;margin:0 auto 2.25rem;font-style:italic;">
+      See your rider. Track your delivery. Grow your business.
+    </p>
+    <div style="display:flex;gap:1rem;justify-content:center;">
+      <button class="btn btn-gold">◆ Enter Portal</button>
+      <button class="btn btn-outline" style="color:var(--ivory);border-color:rgba(201,168,76,0.45);">Learn More</button>
+    </div>
+  </div>
+
+  <!-- Portal cards -->
+  <section style="background:var(--ivory);">
+    <div style="text-align:center;margin-bottom:2.5rem;">
+      <p class="eyebrow">◆ Choose Your Portal ◆</p>
+      <h2 style="font-size:2rem;margin-top:0.4rem;color:var(--night);">Access Your Dashboard</h2>
+      <div class="divider" style="max-width:180px;margin:0.75rem auto 0;"><div class="line"></div><div class="gem"></div><div class="line"></div></div>
+    </div>
+    <div class="g3">
+      <!-- Admin -->
+      <div class="card" style="transition:all 0.25s;">
+        <div class="card-top-bar"></div>
+        <div style="width:52px;height:52px;background:linear-gradient(135deg,var(--night),var(--night-mid));display:flex;align-items:center;justify-content:center;font-size:1.4rem;border:1px solid rgba(201,168,76,0.4);margin-bottom:1.25rem;">⚙</div>
+        <p class="eyebrow" style="margin-bottom:0.4rem;">Platform Administration</p>
+        <h3 style="font-size:1.35rem;color:var(--night);margin-bottom:0.65rem;">Admin Portal</h3>
+        <p style="font-size:0.95rem;color:var(--muted);font-style:italic;line-height:1.75;margin-bottom:1.5rem;">Real-time rider monitoring, delivery dispatch, and platform analytics.</p>
+        <div class="divider"><div class="line"></div><div class="gem"></div><div class="line"></div></div>
+        <button class="btn btn-night" style="width:100%;">Enter Admin</button>
+      </div>
+      <!-- Business -->
+      <div class="card" style="border-color:rgba(196,98,45,0.25);transition:all 0.25s;">
+        <div style="height:3px;background:linear-gradient(90deg,var(--earth),var(--terracotta),var(--earth));margin:-1.75rem -1.75rem 1.5rem;"></div>
+        <div style="width:52px;height:52px;background:linear-gradient(135deg,var(--earth),var(--terracotta));display:flex;align-items:center;justify-content:center;font-size:1.4rem;border:1px solid rgba(196,98,45,0.35);margin-bottom:1.25rem;">🏢</div>
+        <p class="eyebrow" style="color:var(--terracotta);margin-bottom:0.4rem;">Business Clients</p>
+        <h3 style="font-size:1.35rem;color:var(--night);margin-bottom:0.65rem;">Business Portal</h3>
+        <p style="font-size:0.95rem;color:var(--muted);font-style:italic;line-height:1.75;margin-bottom:1.5rem;">Request deliveries, track riders live, and manage your subscription.</p>
+        <div class="divider"><div class="line" style="background:linear-gradient(to right,transparent,var(--terracotta),transparent);"></div><div class="gem" style="background:var(--terracotta);"></div><div class="line" style="background:linear-gradient(to right,transparent,var(--terracotta),transparent);"></div></div>
+        <button class="btn" style="width:100%;background:linear-gradient(135deg,var(--earth),var(--terracotta));color:white;font-family:'Cinzel',serif;font-size:0.68rem;letter-spacing:0.2em;text-transform:uppercase;padding:0.7rem 1.75rem;">Enter Business</button>
+      </div>
+      <!-- Rider -->
+      <div class="card" style="border-color:rgba(45,106,79,0.25);transition:all 0.25s;">
+        <div style="height:3px;background:linear-gradient(90deg,var(--rider-dark),var(--rider-green),var(--rider-dark));margin:-1.75rem -1.75rem 1.5rem;"></div>
+        <div style="width:52px;height:52px;background:linear-gradient(135deg,var(--rider-dark),var(--rider-green));display:flex;align-items:center;justify-content:center;font-size:1.4rem;border:1px solid rgba(45,106,79,0.35);margin-bottom:1.25rem;">🏍</div>
+        <p class="eyebrow" style="color:var(--rider-green);margin-bottom:0.4rem;">Delivery Riders</p>
+        <h3 style="font-size:1.35rem;color:var(--night);margin-bottom:0.65rem;">Rider Portal</h3>
+        <p style="font-size:0.95rem;color:var(--muted);font-style:italic;line-height:1.75;margin-bottom:1.5rem;">Accept delivery offers, track your earnings, manage availability.</p>
+        <div class="divider"><div class="line" style="background:linear-gradient(to right,transparent,var(--rider-green),transparent);"></div><div class="gem" style="background:var(--rider-green);"></div><div class="line" style="background:linear-gradient(to right,transparent,var(--rider-green),transparent);"></div></div>
+        <button class="btn" style="width:100%;background:linear-gradient(135deg,var(--rider-dark),var(--rider-green));color:white;font-family:'Cinzel',serif;font-size:0.68rem;letter-spacing:0.2em;text-transform:uppercase;padding:0.7rem 1.75rem;">Enter Rider</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SECTION 2: ADMIN DASHBOARD
+  ══════════════════════════════════════════ -->
+  <div class="preview-label">§ 2 — Admin Dashboard</div>
+  <div class="geo-strip"></div>
+
+  <section style="background:var(--parchment);">
+    <!-- Admin nav -->
+    <div class="nav" style="margin-bottom:2rem;border:1px solid rgba(201,168,76,0.3);">
+      <div style="display:flex;align-items:center;gap:1.5rem;">
+        <div class="nav-brand">⚙ ADMIN</div>
+        <span style="color:var(--muted);font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.25em;">DISPATCH CONTROL</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <span class="badge badge-gold">● System Live</span>
+        <span style="font-size:0.9rem;color:var(--muted);">Platform Admin</span>
+        <button class="btn btn-outline" style="padding:0.35rem 0.9rem;font-size:0.58rem;">Logout</button>
+      </div>
+    </div>
+    <!-- Stats -->
+    <div class="g4" style="margin-bottom:2rem;">
+      <div class="stat-card"><div class="gem-corner"></div><p class="eyebrow">Riders Online</p><div class="stat-value">12</div><p style="font-size:0.8rem;color:var(--muted);font-style:italic;">3 busy · 9 available</p><div class="progress" style="margin-top:0.65rem;"><div class="progress-fill" style="width:75%;"></div></div></div>
+      <div class="stat-card"><div class="gem-corner"></div><p class="eyebrow">Deliveries</p><div class="stat-value">7</div><p style="font-size:0.8rem;color:var(--muted);font-style:italic;">2 pending dispatch</p><div class="progress" style="margin-top:0.65rem;"><div class="progress-fill" style="width:58%;"></div></div></div>
+      <div class="stat-card"><div class="gem-corner"></div><p class="eyebrow">Businesses</p><div class="stat-value">24</div><p style="font-size:0.8rem;color:var(--muted);font-style:italic;">18 active plans</p><div class="progress" style="margin-top:0.65rem;"><div class="progress-fill" style="width:85%;"></div></div></div>
+      <div class="stat-card"><div class="gem-corner"></div><p class="eyebrow">Revenue Today</p><div class="stat-value" style="font-size:2rem;">1,240</div><p style="font-size:0.8rem;color:var(--muted);font-style:italic;">MAD · +12%</p><div class="progress" style="margin-top:0.65rem;"><div class="progress-fill" style="width:62%;background:linear-gradient(90deg,var(--earth),var(--terracotta));"></div></div></div>
+    </div>
+    <!-- Map + Riders -->
+    <div class="g2">
+      <div class="card" style="padding:0;">
+        <div style="padding:1.1rem 1.5rem;border-bottom:1px solid rgba(201,168,76,0.2);display:flex;align-items:center;justify-content:space-between;">
+          <div><p class="eyebrow" style="margin-bottom:0.2rem;">Live Tracking</p><h4 style="font-size:1.05rem;color:var(--night);">Tangier Dispatch Map</h4></div>
+          <div style="display:flex;gap:0.5rem;"><span class="badge badge-available">● 9 Online</span><span class="badge badge-busy">● 3 Busy</span></div>
+        </div>
+        <div class="map-ph" style="height:260px;">
+          <div style="font-size:2.5rem;">🗺</div>
+          <span>Live Map — Leaflet</span>
+          <span style="font-size:0.55rem;">Rider markers &amp; delivery routes</span>
+        </div>
+      </div>
+      <div class="card">
+        <p class="eyebrow" style="margin-bottom:0.2rem;">Active Fleet</p>
+        <h4 style="font-size:1.05rem;color:var(--night);margin-bottom:1rem;">Rider Status</h4>
+        <div class="rider-row">
+          <div style="display:flex;align-items:center;gap:0.75rem;"><div class="avatar">H</div><div><div style="font-size:0.95rem;font-weight:600;color:var(--night);">Hassan Mouhcine</div><div style="font-size:0.75rem;color:var(--muted);font-style:italic;">Zone Nord · 8 today</div></div></div>
+          <span class="badge badge-available">Available</span>
+        </div>
+        <div class="rider-row">
+          <div style="display:flex;align-items:center;gap:0.75rem;"><div class="avatar">Y</div><div><div style="font-size:0.95rem;font-weight:600;color:var(--night);">Youssef Karimi</div><div style="font-size:0.75rem;color:var(--muted);font-style:italic;">Centre · 12 today</div></div></div>
+          <span class="badge badge-busy">In Transit</span>
+        </div>
+        <div class="rider-row">
+          <div style="display:flex;align-items:center;gap:0.75rem;"><div class="avatar">K</div><div><div style="font-size:0.95rem;font-weight:600;color:var(--night);">Karim Benali</div><div style="font-size:0.75rem;color:var(--muted);font-style:italic;">Port Area · 5 today</div></div></div>
+          <span class="badge badge-available">Available</span>
+        </div>
+        <div class="rider-row">
+          <div style="display:flex;align-items:center;gap:0.75rem;"><div class="avatar" style="background:var(--parchment);color:var(--muted);">S</div><div><div style="font-size:0.95rem;font-weight:600;color:var(--muted);">Samir Tazi</div><div style="font-size:0.75rem;color:var(--muted);font-style:italic;">Offline since 14:30</div></div></div>
+          <span class="badge badge-offline">Offline</span>
+        </div>
+        <div style="margin-top:1.25rem;"><button class="btn btn-night" style="width:100%;">View All Riders</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SECTION 3: BUSINESS DASHBOARD
+  ══════════════════════════════════════════ -->
+  <div class="preview-label">§ 3 — Business Dashboard</div>
+  <div class="geo-strip"></div>
+
+  <section style="background:var(--ivory);">
+    <div class="nav" style="margin-bottom:2rem;border:1px solid rgba(196,98,45,0.3);">
+      <div class="nav-brand" style="color:var(--earth);">
+        <div class="nav-gem" style="background:var(--terracotta);"></div>CAFÉ TANGER<div class="nav-gem" style="background:var(--terracotta);"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <span class="badge" style="color:var(--terracotta);border-color:rgba(196,98,45,0.3);background:rgba(196,98,45,0.08);">Gold Plan</span>
+        <button class="btn btn-outline" style="padding:0.35rem 0.9rem;font-size:0.58rem;border-color:var(--earth);color:var(--earth);">Logout</button>
+      </div>
+    </div>
+    <div class="g3" style="margin-bottom:2rem;">
+      <div class="stat-card" style="text-align:center;border-color:rgba(196,98,45,0.2);"><div class="gem-corner" style="background:var(--terracotta);"></div><p class="eyebrow" style="color:var(--terracotta);">Subscription</p><div style="font-family:'Playfair Display',serif;font-size:1.6rem;color:var(--night);margin:0.4rem 0;">Gold</div><span class="badge badge-gold" style="font-size:0.55rem;">Active</span></div>
+      <div class="stat-card" style="text-align:center;"><div class="gem-corner"></div><p class="eyebrow">Rides Left</p><div class="stat-value" style="font-size:2rem;">18</div><p style="font-size:0.8rem;color:var(--muted);font-style:italic;">of 50 this month</p></div>
+      <div class="stat-card" style="text-align:center;"><div class="gem-corner"></div><p class="eyebrow">Wallet</p><div style="font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--night);margin:0.4rem 0;">240 <span style="font-size:1rem;color:var(--muted);">MAD</span></div><p style="font-size:0.8rem;color:var(--muted);font-style:italic;">Available credit</p></div>
+    </div>
+    <div class="g2">
+      <!-- Create form -->
+      <div class="card">
+        <p class="eyebrow" style="color:var(--terracotta);margin-bottom:0.25rem;">New Request</p>
+        <h4 style="font-size:1.1rem;color:var(--night);margin-bottom:1.25rem;">Create Delivery</h4>
+        <div style="margin-bottom:1rem;"><label class="label">Pickup Address</label><input class="input" type="text" value="Café Tanger, Rue de la Liberté"></div>
+        <div style="margin-bottom:1rem;"><label class="label">Dropoff Address</label><input class="input" type="text" placeholder="Enter destination..."></div>
+        <div style="margin-bottom:1rem;"><label class="label">Customer Phone</label><input class="input" type="text" placeholder="+212 6XX XXX XXX"></div>
+        <div style="margin-bottom:1.25rem;"><label class="label">Note</label><input class="input" type="text" placeholder="Special instructions..."></div>
+        <div class="divider"><div class="line"></div><div class="gem"></div><div class="line"></div></div>
+        <button class="btn btn-gold" style="width:100%;">◆ Request Delivery ◆</button>
+      </div>
+      <!-- Active deliveries -->
+      <div class="card">
+        <p class="eyebrow" style="margin-bottom:0.25rem;">In Progress</p>
+        <h4 style="font-size:1.1rem;color:var(--night);margin-bottom:1.25rem;">Active Deliveries</h4>
+        <div style="border:1px solid rgba(201,168,76,0.2);padding:1rem;margin-bottom:0.75rem;background:var(--warm-white);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">
+            <div><div style="font-size:0.9rem;font-weight:600;color:var(--night);">DEL-2847</div><div style="font-size:0.75rem;color:var(--muted);font-style:italic;">Hassan M.</div></div>
+            <span class="badge badge-violet">Picked Up</span>
+          </div>
+          <div class="timeline">
+            <div class="tstep"><div class="tdot"></div><div class="tline"></div><div class="tlabel on">Pending</div></div>
+            <div class="tstep"><div class="tdot"></div><div class="tline"></div><div class="tlabel on">Accepted</div></div>
+            <div class="tstep"><div class="tdot"></div><div class="tline"></div><div class="tlabel on">Picked Up</div></div>
+            <div class="tstep"><div class="tdot off"></div><div class="tline" style="background:rgba(201,168,76,0.15);"></div><div class="tlabel">In Transit</div></div>
+            <div class="tstep"><div class="tdot off"></div><div class="tlabel">Delivered</div></div>
+          </div>
+        </div>
+        <div style="border:1px solid rgba(201,168,76,0.2);padding:1rem;background:var(--warm-white);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">
+            <div><div style="font-size:0.9rem;font-weight:600;color:var(--night);">DEL-2851</div><div style="font-size:0.75rem;color:var(--muted);font-style:italic;">Awaiting rider</div></div>
+            <span class="badge" style="color:#a16207;background:rgba(161,98,7,0.08);border-color:rgba(161,98,7,0.3);">Pending</span>
+          </div>
+          <div class="timeline">
+            <div class="tstep"><div class="tdot"></div><div class="tline"></div><div class="tlabel on">Pending</div></div>
+            <div class="tstep"><div class="tdot off"></div><div class="tline" style="background:rgba(201,168,76,0.15);"></div><div class="tlabel">Accepted</div></div>
+            <div class="tstep"><div class="tdot off"></div><div class="tline" style="background:rgba(201,168,76,0.15);"></div><div class="tlabel">Picked Up</div></div>
+            <div class="tstep"><div class="tdot off"></div><div class="tline" style="background:rgba(201,168,76,0.15);"></div><div class="tlabel">In Transit</div></div>
+            <div class="tstep"><div class="tdot off"></div><div class="tlabel">Delivered</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SECTION 4: RIDER DASHBOARD
+  ══════════════════════════════════════════ -->
+  <div class="preview-label">§ 4 — Rider Dashboard</div>
+  <div class="geo-strip"></div>
+
+  <section style="background:var(--parchment);">
+    <div class="nav" style="margin-bottom:2rem;border:1px solid rgba(45,106,79,0.3);">
+      <div class="nav-brand" style="color:var(--rider-dark);">
+        <div class="nav-gem" style="background:var(--rider-green);"></div>HASSAN M.<div class="nav-gem" style="background:var(--rider-green);"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <span class="badge badge-available">● Online</span>
+        <button class="btn btn-outline" style="padding:0.35rem 0.9rem;font-size:0.58rem;border-color:var(--rider-dark);color:var(--rider-dark);">Logout</button>
+      </div>
+    </div>
+    <div class="g2">
+      <!-- Earnings -->
+      <div class="earnings">
+        <div class="inner">
+          <p class="eyebrow" style="color:rgba(201,168,76,0.6);">This Month</p>
+          <h4 style="font-family:'Playfair Display',serif;font-size:1rem;color:rgba(245,239,230,0.6);font-weight:400;font-style:italic;margin-bottom:0.4rem;">Total Earnings</h4>
+          <div class="earnings-amount">3,840 <span style="font-size:1.4rem;">MAD</span></div>
+          <div class="divider" style="margin:1.1rem 0;"><div class="line" style="background:linear-gradient(to right,transparent,rgba(201,168,76,0.45),transparent);"></div><div class="gem"></div><div class="line" style="background:linear-gradient(to right,transparent,rgba(201,168,76,0.45),transparent);"></div></div>
+          <div class="g2" style="gap:1rem;margin-bottom:1rem;">
+            <div><p style="font-family:'Cinzel',serif;font-size:0.58rem;letter-spacing:0.2em;color:rgba(201,168,76,0.6);text-transform:uppercase;margin-bottom:0.2rem;">Deliveries</p><div style="font-family:'Playfair Display',serif;font-size:1.6rem;color:var(--ivory);">42</div></div>
+            <div><p style="font-family:'Cinzel',serif;font-size:0.58rem;letter-spacing:0.2em;color:rgba(201,168,76,0.6);text-transform:uppercase;margin-bottom:0.2rem;">Avg / Del.</p><div style="font-family:'Playfair Display',serif;font-size:1.6rem;color:var(--ivory);">91 <span style="font-size:0.85rem;color:rgba(201,168,76,0.6);">MAD</span></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.35rem;"><span style="font-family:'Cinzel',serif;font-size:0.58rem;letter-spacing:0.15em;color:rgba(201,168,76,0.65);text-transform:uppercase;">Progress to Gold Tier</span><span style="font-family:'Cinzel',serif;font-size:0.58rem;color:var(--gold-light);">42 / 50</span></div>
+            <div class="progress" style="background:rgba(255,255,255,0.08);"><div class="progress-fill" style="width:84%;"></div></div>
+          </div>
+          <div style="margin-top:1rem;display:inline-block;background:linear-gradient(135deg,var(--gold-dark),var(--gold));color:var(--night);font-family:'Cinzel',serif;font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;padding:0.3rem 0.85rem;">Silver Tier</div>
+        </div>
+      </div>
+      <!-- Right column -->
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+        <!-- Status toggle -->
+        <div class="card" style="padding:1.25rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div><p class="eyebrow" style="color:var(--rider-green);margin-bottom:0.2rem;">Status</p><h5 style="font-size:1rem;color:var(--night);">Currently Online</h5><p style="font-size:0.8rem;color:var(--muted);font-style:italic;">Accepting deliveries</p></div>
+            <div class="toggle"><div class="toggle-knob"></div></div>
+          </div>
+        </div>
+        <!-- Active delivery -->
+        <div class="card" style="padding:1.25rem;flex:1;">
+          <p class="eyebrow" style="color:#6d28d9;margin-bottom:0.2rem;">Active Delivery</p>
+          <h5 style="font-size:1rem;color:var(--night);margin-bottom:0.85rem;">DEL-2847</h5>
+          <div style="display:flex;gap:0.75rem;margin-bottom:1rem;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+              <div style="width:9px;height:9px;background:var(--rider-green);transform:rotate(45deg);"></div>
+              <div style="width:1px;height:36px;background:linear-gradient(to bottom,var(--rider-green),rgba(201,168,76,0.3));"></div>
+              <div style="width:9px;height:9px;background:var(--gold);transform:rotate(45deg);"></div>
+            </div>
+            <div style="flex:1;">
+              <div style="margin-bottom:0.5rem;"><p style="font-family:'Cinzel',serif;font-size:0.55rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);">Pickup</p><p style="font-size:0.9rem;color:var(--night);margin-top:0.15rem;">Café Tanger, Rue de la Liberté</p></div>
+              <div><p style="font-family:'Cinzel',serif;font-size:0.55rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);">Dropoff</p><p style="font-size:0.9rem;color:var(--night);margin-top:0.15rem;">Quartier Admin., Tanger</p></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.75rem;">
+            <button class="btn btn-night" style="flex:1;padding:0.55rem;font-size:0.58rem;">Arrived at Pickup</button>
+            <button class="btn btn-gold" style="flex:1;padding:0.55rem;font-size:0.58rem;">Mark Delivered</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       SECTION 5: DESIGN SYSTEM
+  ══════════════════════════════════════════ -->
+  <div class="preview-label">§ 5 — Design System Reference</div>
+  <div class="geo-strip"></div>
+
+  <section class="zellige-bg">
+    <div class="g2" style="gap:3rem;">
+      <!-- Colors -->
+      <div>
+        <p class="eyebrow" style="margin-bottom:1.5rem;">◆ Color Palette</p>
+        <div style="display:flex;flex-direction:column;gap:0.75rem;">
+          <div style="display:flex;align-items:center;gap:1rem;"><div style="width:48px;height:28px;background:#f5efe6;border:1px solid rgba(201,168,76,0.4);flex-shrink:0;"></div><div><p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.2em;color:var(--gold);">Ivory — #f5efe6</p><p style="font-size:0.75rem;color:var(--muted);">Primary Background</p></div></div>
+          <div style="display:flex;align-items:center;gap:1rem;"><div style="width:48px;height:28px;background:#c9a84c;flex-shrink:0;"></div><div><p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.2em;color:var(--gold);">Antique Gold — #c9a84c</p><p style="font-size:0.75rem;color:var(--muted);">Primary Accent / Admin</p></div></div>
+          <div style="display:flex;align-items:center;gap:1rem;"><div style="width:48px;height:28px;background:#c4622d;flex-shrink:0;"></div><div><p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.2em;color:var(--gold);">Terracotta — #c4622d</p><p style="font-size:0.75rem;color:var(--muted);">Business Portal</p></div></div>
+          <div style="display:flex;align-items:center;gap:1rem;"><div style="width:48px;height:28px;background:#2d6a4f;flex-shrink:0;"></div><div><p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.2em;color:var(--gold);">Forest Green — #2d6a4f</p><p style="font-size:0.75rem;color:var(--muted);">Rider Portal</p></div></div>
+          <div style="display:flex;align-items:center;gap:1rem;"><div style="width:48px;height:28px;background:#1a1035;flex-shrink:0;"></div><div><p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.2em;color:var(--gold);">Night Indigo — #1a1035</p><p style="font-size:0.75rem;color:var(--muted);">Dark Sections + Hero BG</p></div></div>
+        </div>
+      </div>
+      <!-- Typography -->
+      <div>
+        <p class="eyebrow" style="margin-bottom:1.5rem;">◆ Typography</p>
+        <div style="margin-bottom:1.5rem;border-bottom:1px solid rgba(201,168,76,0.15);padding-bottom:1.25rem;">
+          <p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.25em;color:var(--muted);text-transform:uppercase;margin-bottom:0.4rem;">Display / Labels — Cinzel</p>
+          <p style="font-family:'Cinzel',serif;font-size:2rem;color:var(--ivory);letter-spacing:0.08em;">THE 1000</p>
+          <p style="font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.35em;color:var(--muted);text-transform:uppercase;">COURIER PLATFORM</p>
+        </div>
+        <div style="margin-bottom:1.5rem;border-bottom:1px solid rgba(201,168,76,0.15);padding-bottom:1.25rem;">
+          <p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.25em;color:var(--muted);text-transform:uppercase;margin-bottom:0.4rem;">Headings — Playfair Display</p>
+          <p style="font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--ivory);">Admin Dashboard</p>
+          <p style="font-family:'Playfair Display',serif;font-size:1.1rem;font-style:italic;color:var(--muted);">The Art of Delivery</p>
+        </div>
+        <div>
+          <p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.25em;color:var(--muted);text-transform:uppercase;margin-bottom:0.4rem;">Body — Cormorant Garamond</p>
+          <p style="font-family:'Cormorant Garamond',serif;font-size:1.2rem;color:var(--ivory);">Track deliveries across Tangier.</p>
+          <p style="font-family:'Cormorant Garamond',serif;font-size:0.95rem;color:var(--muted);font-style:italic;line-height:1.7;">Real-time monitoring, elegant dispatch, precise tracking.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Footer -->
+<div style="background:var(--night);border-top:3px solid var(--gold);padding:1rem 2rem;text-align:center;">
+  <p style="font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.4em;color:rgba(201,168,76,0.45);text-transform:uppercase;">◆ The 1000 Courier · Moroccan Geometric Luxury · Design Preview ◆</p>
+</div>
+
+</body>
+</html>

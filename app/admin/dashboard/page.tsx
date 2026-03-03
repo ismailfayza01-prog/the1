@@ -5,9 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { userService, riderService, businessService, deliveryService } from '@/lib/storage';
 import { createClient } from '@/lib/supabase/client';
+import { MAP_3D_ENABLED } from '@/components/maps/config';
+import { AdminMap3D } from '@/components/maps/AdminMap3D';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin,
@@ -40,6 +44,68 @@ function getRiderLocation(rider: Rider): { lat: number; lng: number } {
   const current = rider.current_location as { lat: number; lng: number } | null;
   if (current) return current;
   return seedLocation(rider.id);
+}
+
+function getRiderStatusColor(status: Rider['status']): string {
+  if (status === 'available') return '#10b981';
+  if (status === 'busy') return '#f59e0b';
+  return '#94a3b8';
+}
+
+function getRiderMotoIcon(L: any, status: Rider['status']): any {
+  const size = 38;
+  const statusColor = getRiderStatusColor(status);
+  const statusClass = status === 'available'
+    ? 'map-rider-status--online'
+    : status === 'busy'
+      ? 'map-rider-status--busy'
+      : 'map-rider-status--offline';
+  return L.divIcon({
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    html: `
+      <div class="map-rider-marker" style="width:${size}px;height:${size}px;">
+        <div class="map-rider-core" style="width:${size}px;height:${size}px;">
+          <svg class="map-rider-bike" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="6" cy="17" r="3"></circle>
+            <circle cx="18" cy="17" r="3"></circle>
+            <path d="M6 17h6l2-6h-4l-2 6"></path>
+            <path d="M14 7h3l2 4"></path>
+          </svg>
+        </div>
+        <div class="map-rider-status ${statusClass}" style="background:${statusColor};"></div>
+      </div>
+    `,
+  });
+}
+
+function getPickupFlagIcon(L: any): any {
+  return L.divIcon({
+    className: '',
+    iconSize: [30, 36],
+    iconAnchor: [15, 34],
+    html: `
+      <div class="map-flag-marker">
+        <div class="map-flag-pole map-flag-pole--pickup"></div>
+        <div class="map-flag-cloth map-flag-cloth--pickup"></div>
+      </div>
+    `,
+  });
+}
+
+function getDropoffFlagIcon(L: any): any {
+  return L.divIcon({
+    className: '',
+    iconSize: [30, 36],
+    iconAnchor: [15, 34],
+    html: `
+      <div class="map-flag-marker">
+        <div class="map-flag-pole map-flag-pole--dropoff"></div>
+        <div class="map-flag-cloth map-flag-cloth--dropoff"></div>
+      </div>
+    `,
+  });
 }
 
 function getDeliveryPoint(delivery: Delivery, kind: 'pickup' | 'dropoff'): { lat: number; lng: number } {
@@ -135,18 +201,8 @@ function AdminLiveMap({ riders, deliveries }: AdminLiveMapProps) {
 
     for (const rider of riders) {
       const loc = getRiderLocation(rider);
-      const fillColor = rider.status === 'available'
-        ? '#10b981'
-        : rider.status === 'busy'
-          ? '#f59e0b'
-          : '#94a3b8';
-
-      L.circleMarker([loc.lat, loc.lng], {
-        radius: 7,
-        fillColor,
-        fillOpacity: 0.95,
-        color: '#ffffff',
-        weight: 2,
+      L.marker([loc.lat, loc.lng], {
+        icon: getRiderMotoIcon(L, rider.status),
       })
         .addTo(layer)
         .bindTooltip(`${rider.name} · ${rider.status}`, { direction: 'top', offset: [0, -8] });
@@ -179,21 +235,8 @@ function AdminLiveMap({ riders, deliveries }: AdminLiveMapProps) {
         .addTo(layer)
         .bindTooltip(`${delivery.business_name} · ${delivery.status}`, { direction: 'top', offset: [0, -8] });
 
-      L.circleMarker([pickup.lat, pickup.lng], {
-        radius: 4,
-        fillColor: '#0ea5e9',
-        fillOpacity: 0.95,
-        color: '#ffffff',
-        weight: 2,
-      }).addTo(layer);
-
-      L.circleMarker([dropoff.lat, dropoff.lng], {
-        radius: 5,
-        fillColor: '#ef4444',
-        fillOpacity: 0.95,
-        color: '#ffffff',
-        weight: 2,
-      }).addTo(layer);
+      L.marker([pickup.lat, pickup.lng], { icon: getPickupFlagIcon(L) }).addTo(layer);
+      L.marker([dropoff.lat, dropoff.lng], { icon: getDropoffFlagIcon(L) }).addTo(layer);
     }
 
     if (!mapRef.current || didFitBoundsRef.current || (riders.length === 0 && activeDeliveries.length === 0)) return;
@@ -226,6 +269,11 @@ export default function AdminDashboardPage() {
   const [assignDraftByDelivery, setAssignDraftByDelivery] = useState<Record<string, string>>({});
   const [mutatingDeliveryId, setMutatingDeliveryId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState('');
+  const [walletBusinessId, setWalletBusinessId] = useState('');
+  const [walletAmount, setWalletAmount] = useState('');
+  const [walletPaymentMethod, setWalletPaymentMethod] = useState<'cash' | 'card' | 'check'>('cash');
+  const [walletNote, setWalletNote] = useState('');
+  const [walletSubmitting, setWalletSubmitting] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -265,6 +313,12 @@ export default function AdminDashboardPage() {
     setDeliveries(await deliveryService.getAll());
   };
 
+  useEffect(() => {
+    if (!walletBusinessId && businesses.length > 0) {
+      setWalletBusinessId(businesses[0].id);
+    }
+  }, [businesses, walletBusinessId]);
+
   const handleLogout = async () => {
     await userService.logout();
     router.push('/admin');
@@ -303,6 +357,53 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleAdminWalletCredit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    const target = businesses.find((b) => b.id === walletBusinessId);
+    if (!target) {
+      setActionMsg('Select a business first');
+      return;
+    }
+
+    const amount = parseFloat(walletAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setActionMsg('Enter a valid credit amount');
+      return;
+    }
+    if (amount > 99999) {
+      setActionMsg('Amount cannot exceed 99,999 MAD');
+      return;
+    }
+
+    setWalletSubmitting(true);
+    try {
+      const ok = await businessService.adminAddCredits(
+        target.id,
+        amount,
+        walletPaymentMethod,
+        currentUser.id,
+        walletNote
+      );
+      if (!ok) {
+        setActionMsg('Failed to add wallet credit');
+        return;
+      }
+
+      await loadData();
+      setWalletAmount('');
+      setWalletNote('');
+      setActionMsg(`+${amount} MAD added to ${target.name} (${walletPaymentMethod})`);
+      setTimeout(() => setActionMsg(''), 4000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to add wallet credit';
+      setActionMsg(message);
+    } finally {
+      setWalletSubmitting(false);
+    }
+  };
+
   if (!currentUser) return null;
 
   const availableRiders = riders.filter(r => r.status === 'available').length;
@@ -318,6 +419,7 @@ export default function AdminDashboardPage() {
     const tierRevenue = b.subscription_tier === 'monthly' ? 200 : b.subscription_tier === 'annual' ? 1800 : 0;
     return sum + tierRevenue + b.wallet_balance;
   }, 0);
+  const selectedWalletBusiness = businesses.find((business) => business.id === walletBusinessId) || null;
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, string> = {
@@ -474,7 +576,16 @@ export default function AdminDashboardPage() {
                 <Badge className={`border ${getStatusBadge('pending')}`}>Active deliveries: {activeDeliveries}</Badge>
               </div>
               <div className="relative aspect-video w-full rounded-2xl border border-violet-100 overflow-hidden bg-slate-50">
-                <AdminLiveMap riders={riders} deliveries={deliveries} />
+                {MAP_3D_ENABLED ? (
+                  <AdminMap3D
+                    riders={riders}
+                    deliveries={deliveries}
+                    className="h-full w-full rounded-2xl"
+                    fallback={<AdminLiveMap riders={riders} deliveries={deliveries} />}
+                  />
+                ) : (
+                  <AdminLiveMap riders={riders} deliveries={deliveries} />
+                )}
               </div>
             </div>
           </CardContent>
@@ -536,14 +647,99 @@ export default function AdminDashboardPage() {
             <Card className="border border-sky-100 bg-white shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-bold">Business Management</CardTitle>
-                <CardDescription>Manage business accounts and subscriptions</CardDescription>
+                <CardDescription>Manage business accounts, subscriptions, and admin wallet credits</CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
+                  <div className="text-sm font-bold text-sky-800">Admin Wallet Credit Panel</div>
+                  <p className="mt-1 text-xs text-sky-700">
+                    Choose customer, input amount, choose payment method, then validate.
+                  </p>
+
+                  <form onSubmit={handleAdminWalletCredit} className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1 md:col-span-2">
+                      <Label htmlFor="wallet-business" className="text-xs text-sky-800">Customer</Label>
+                      <select
+                        id="wallet-business"
+                        className="h-10 w-full rounded-md border border-sky-200 bg-white px-3 text-sm"
+                        value={walletBusinessId}
+                        onChange={(event) => setWalletBusinessId(event.target.value)}
+                        required
+                      >
+                        <option value="">Select a customer</option>
+                        {businesses.map((business) => (
+                          <option key={business.id} value={business.id}>
+                            {business.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="wallet-amount" className="text-xs text-sky-800">Credit Amount (MAD)</Label>
+                      <Input
+                        id="wallet-amount"
+                        type="number"
+                        min="1"
+                        step="1"
+                        placeholder="e.g. 150"
+                        value={walletAmount}
+                        onChange={(event) => setWalletAmount(event.target.value)}
+                        required
+                        disabled={walletSubmitting}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="wallet-method" className="text-xs text-sky-800">Payment Method</Label>
+                      <select
+                        id="wallet-method"
+                        className="h-10 w-full rounded-md border border-sky-200 bg-white px-3 text-sm"
+                        value={walletPaymentMethod}
+                        onChange={(event) => setWalletPaymentMethod(event.target.value as 'cash' | 'card' | 'check')}
+                        disabled={walletSubmitting}
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="card">Card</option>
+                        <option value="check">Check</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1 md:col-span-2">
+                      <Label htmlFor="wallet-note" className="text-xs text-sky-800">Note (optional)</Label>
+                      <Input
+                        id="wallet-note"
+                        placeholder="Reference / payment note"
+                        value={walletNote}
+                        onChange={(event) => setWalletNote(event.target.value)}
+                        disabled={walletSubmitting}
+                      />
+                    </div>
+
+                    {selectedWalletBusiness && (
+                      <div className="md:col-span-2 rounded-md border border-sky-200 bg-white px-3 py-2 text-xs text-sky-700">
+                        Selected: <span className="font-semibold">{selectedWalletBusiness.name}</span> · Current wallet: {selectedWalletBusiness.wallet_balance} MAD
+                      </div>
+                    )}
+
+                    <div className="md:col-span-2 flex justify-end">
+                      <Button type="submit" disabled={walletSubmitting || !walletBusinessId || !walletAmount}>
+                        {walletSubmitting ? 'Validating...' : 'Validate Credit'}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+
                 <div className="space-y-3">
                   {businesses.map((business) => (
                     <div
                       key={business.id}
-                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-background hover:bg-sky-50/50 hover:border-sky-100 transition-all"
+                      onClick={() => setWalletBusinessId(business.id)}
+                      className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition-all ${
+                        walletBusinessId === business.id
+                          ? 'border-sky-300 bg-sky-50'
+                          : 'border-border bg-background hover:bg-sky-50/50 hover:border-sky-100'
+                      }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-xl bg-sky-100 flex items-center justify-center">
@@ -555,6 +751,11 @@ export default function AdminDashboardPage() {
                             {business.subscription_tier !== 'none' && (
                               <Badge className="text-xs border bg-sky-100 text-sky-700 border-sky-200 capitalize">
                                 {business.subscription_tier}
+                              </Badge>
+                            )}
+                            {walletBusinessId === business.id && (
+                              <Badge className="text-xs border bg-emerald-100 text-emerald-700 border-emerald-200">
+                                Selected
                               </Badge>
                             )}
                           </div>

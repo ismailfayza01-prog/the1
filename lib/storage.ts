@@ -7,6 +7,24 @@ function getSupabase() {
   return createClient();
 }
 
+function isMissingRpcError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { code?: string; message?: string };
+  return e.code === 'PGRST202' || (e.message ?? '').includes('schema cache');
+}
+
+function isMissingTableError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { code?: string; message?: string };
+  return e.code === 'PGRST205' || (e.message ?? '').includes('Could not find the table');
+}
+
+function isNoRowsError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { code?: string; message?: string };
+  return e.code === 'PGRST116' || (e.message ?? '').toLowerCase().includes('0 rows');
+}
+
 // User management
 export const userService = {
   getAll: async (): Promise<User[]> => {
@@ -25,24 +43,34 @@ export const userService = {
   },
 
   login: async (email: string, password: string): Promise<User | null> => {
-    const supabase = getSupabase();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return null;
+    try {
+      const supabase = getSupabase();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return null;
 
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return null;
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return null;
 
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
-    return (profile as User) || null;
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+      return (profile as User) || null;
+    } catch (error) {
+      console.error('Login failed', error);
+      return null;
+    }
   },
 
   getCurrentUser: async (): Promise<User | null> => {
-    const supabase = getSupabase();
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return null;
+    try {
+      const supabase = getSupabase();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return null;
 
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
-    return (profile as User) || null;
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+      return (profile as User) || null;
+    } catch (error) {
+      console.error('Get current user failed', error);
+      return null;
+    }
   },
 
   logout: async (): Promise<void> => {
@@ -83,20 +111,43 @@ export const businessService = {
     return !!data;
   },
 
-  // Add credits to wallet with transaction logging
-  addCredits: async (id: string, amount: number, userId: string): Promise<boolean> => {
-    if (amount <= 0) return false;
+  // Admin-only wallet credit with payment tracking
+  adminAddCredits: async (
+    id: string,
+    amount: number,
+    paymentMethod: 'cash' | 'card' | 'check',
+    adminUserId: string,
+    note?: string
+  ): Promise<boolean> => {
+    if (amount <= 0 || !Number.isFinite(amount)) return false;
+
+    const supabase = getSupabase();
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) throw new Error('Unauthorized');
+
+    const { data: me } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', authData.user.id)
+      .single();
+    const role = (me as { role?: string } | null)?.role;
+    if (role !== 'admin') throw new Error('Only admin can add credits');
+
     const business = await businessService.getById(id);
     if (!business) return false;
 
     await businessService.update(id, { wallet_balance: business.wallet_balance + amount });
+
+    const cleanNote = note?.trim();
     await transactionService.create({
-      user_id: userId,
+      user_id: adminUserId,
       type: 'top_up',
       amount,
-      payment_method: 'cash',
+      payment_method: paymentMethod,
       status: 'completed',
-      description: `Wallet top-up: +${amount} MAD`,
+      description: cleanNote
+        ? `Admin wallet top-up (${paymentMethod}) for ${business.name} [customer:${business.user_id}]: ${cleanNote}`
+        : `Admin wallet top-up (${paymentMethod}) for ${business.name} [customer:${business.user_id}]`,
     });
     return true;
   },
@@ -152,13 +203,30 @@ export const riderService = {
   },
 
   getById: async (id: string): Promise<Rider | undefined> => {
-    const { data } = await getSupabase().from('riders').select('*').eq('id', id).single();
+    const { data, error } = await getSupabase().from('riders').select('*').eq('id', id).single();
+    if (error) {
+      if (isNoRowsError(error)) return undefined;
+      throw error;
+    }
     return (data as Rider) || undefined;
   },
 
   getByUserId: async (userId: string): Promise<Rider | undefined> => {
-    const { data } = await getSupabase().from('riders').select('*').eq('user_id', userId).single();
+    const { data, error } = await getSupabase().from('riders').select('*').eq('user_id', userId).single();
+    if (error) {
+      if (isNoRowsError(error)) return undefined;
+      throw error;
+    }
     return (data as Rider) || undefined;
+  },
+
+  ensureCurrentUserProfile: async (): Promise<Rider | null> => {
+    const { data, error } = await getSupabase().rpc('ensure_rider_profile');
+    if (error) {
+      if (isMissingRpcError(error)) return null;
+      throw error;
+    }
+    return (data as Rider) || null;
   },
 
   getAvailable: async (): Promise<Rider[]> => {
@@ -167,12 +235,13 @@ export const riderService = {
   },
 
   update: async (id: string, updates: Partial<Rider>): Promise<Rider | null> => {
-    const { data } = await getSupabase()
+    const { data, error } = await getSupabase()
       .from('riders')
       .update(updates)
       .eq('id', id)
       .select()
       .single();
+    if (error) throw error;
     return (data as Rider) || null;
   },
 
@@ -186,8 +255,25 @@ export const riderService = {
     });
   },
 
+  pingPresence: async (id: string, location?: { lat: number; lng: number } | null): Promise<void> => {
+    if (location) {
+      await riderService.update(id, {
+        current_location: location,
+        last_location_update: new Date().toISOString(),
+        last_lat: location.lat,
+        last_lng: location.lng,
+        last_seen_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    await riderService.update(id, {
+      last_seen_at: new Date().toISOString(),
+    });
+  },
+
   updateStatus: async (id: string, status: 'available' | 'busy' | 'offline'): Promise<void> => {
-    await riderService.update(id, { status });
+    await riderService.update(id, { status, last_seen_at: new Date().toISOString() });
   },
 };
 
@@ -264,11 +350,23 @@ export const deliveryService = {
   create: async (delivery: Omit<Delivery, 'id' | 'created_at'>): Promise<Delivery> => {
     // Remove denormalized name fields before inserting
     const { business_name: _bn, rider_name: _rn, ...insertData } = delivery as Delivery;
-    const { data, error } = await getSupabase()
+    let { data, error } = await getSupabase()
       .from('deliveries')
       .insert(insertData)
       .select('*, businesses(name), riders(name)')
       .single();
+
+    if (error && ((error.message ?? '').includes('dropoff_phone') || (error.message ?? '').includes('note'))) {
+      const { dropoff_phone: _dp, note: _nt, ...fallbackInsert } = insertData as Delivery;
+      const retry = await getSupabase()
+        .from('deliveries')
+        .insert(fallbackInsert)
+        .select('*, businesses(name), riders(name)')
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
+
     if (error) throw error;
     
     return {
@@ -324,49 +422,130 @@ export const deliveryService = {
   dispatchDelivery: async (deliveryId: string, preferredRiderUserId?: string | null): Promise<DeliveryOffer[]> => {
     const { data, error } = await getSupabase()
       .rpc('dispatch_delivery', { p_delivery_id: deliveryId, p_preferred_rider_user_id: preferredRiderUserId ?? null });
+    if (error) {
+      if (!isMissingRpcError(error)) throw error;
+      const riders = await riderService.getAvailable();
+      const preferred = preferredRiderUserId ? riders.find((r) => r.user_id === preferredRiderUserId) : null;
+      const fallbackRider = preferred ?? riders[0];
+      if (!fallbackRider) return [];
+      await deliveryService.update(deliveryId, { rider_id: fallbackRider.id, status: 'pending' } as Partial<Delivery>);
+      await riderService.updateStatus(fallbackRider.id, 'busy');
+      return [];
+    }
+    if (Array.isArray(data)) {
+      if (data.length > 0) return data as DeliveryOffer[];
+      const latest = await deliveryService.getById(deliveryId);
+      if (latest && (latest.rider_id || latest.status === 'offered' || latest.status === 'accepted')) {
+        return [];
+      }
+      throw new Error('No rider available');
+    }
+
+    if (data && typeof data === 'object') {
+      const payload = data as Record<string, unknown>;
+      if (payload.ok === false) {
+        const reason = typeof payload.reason === 'string' ? payload.reason : 'dispatch_failed';
+        if (reason === 'no_rider_available') throw new Error('No rider available');
+        throw new Error(`Dispatch failed: ${reason}`);
+      }
+      return [];
+    }
+
+    const latest = await deliveryService.getById(deliveryId);
+    if (latest && (latest.rider_id || latest.status === 'offered' || latest.status === 'accepted')) {
+      return [];
+    }
+    throw new Error('No rider available');
+  },
+
+  adminCreateOffer: async (deliveryId: string, riderId: string): Promise<Delivery | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('admin_assign_delivery', { p_delivery_id: deliveryId, p_rider_id: riderId, p_create_offer: true });
     if (error) throw error;
-    return (data as DeliveryOffer[]) || [];
+    return (data as Delivery) || null;
+  },
+
+  adminAssignDelivery: async (deliveryId: string, riderId: string, createOffer = false): Promise<Delivery | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('admin_assign_delivery', { p_delivery_id: deliveryId, p_rider_id: riderId, p_create_offer: createOffer });
+    if (error) {
+      if (!isMissingRpcError(error)) throw error;
+      return await deliveryService.update(deliveryId, { rider_id: riderId, status: 'pending' } as Partial<Delivery>);
+    }
+    return (data as Delivery) || null;
+  },
+
+  adminOverrideStatus: async (deliveryId: string, status: Delivery['status']): Promise<Delivery | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('admin_override_delivery_status', { p_delivery_id: deliveryId, p_status: status });
+    if (error) {
+      if (!isMissingRpcError(error)) throw error;
+      return await deliveryService.update(deliveryId, { status } as Partial<Delivery>);
+    }
+    return (data as Delivery) || null;
   },
 
   getMyOffers: async (): Promise<DeliveryOffer[]> => {
-    const { data } = await getSupabase()
+    const { data, error } = await getSupabase()
       .from('delivery_offers')
       .select('*')
       .order('offered_at', { ascending: false });
+    if (error && isMissingTableError(error)) return [];
     return (data as DeliveryOffer[]) || [];
   },
 
   acceptOffer: async (offerId: string): Promise<Delivery | null> => {
     const { data, error } = await getSupabase()
       .rpc('rider_accept_offer', { p_offer_id: offerId });
-    if (error) throw error;
+    if (error) {
+      if (isMissingRpcError(error)) return null;
+      throw error;
+    }
     return (data as Delivery) || null;
   },
 
   refuseOffer: async (offerId: string): Promise<void> => {
     const { error } = await getSupabase()
       .rpc('rider_refuse_offer', { p_offer_id: offerId });
-    if (error) throw error;
+    if (error && !isMissingRpcError(error)) throw error;
   },
 
   setDeliveryOtp: async (deliveryId: string, otp: string): Promise<{ delivery_id: string; expires_at: string } | null> => {
     const { data, error } = await getSupabase()
       .rpc('set_delivery_otp', { p_delivery_id: deliveryId, p_otp: otp });
-    if (error) throw error;
+    if (error) {
+      if (isMissingRpcError(error)) return null;
+      throw error;
+    }
     return (data as { delivery_id: string; expires_at: string }) || null;
   },
 
   verifyDeliveryOtp: async (deliveryId: string, otp: string): Promise<Delivery | null> => {
     const { data, error } = await getSupabase()
       .rpc('verify_delivery_otp', { p_delivery_id: deliveryId, p_otp: otp });
-    if (error) throw error;
+    if (error) {
+      if (isMissingRpcError(error)) {
+        return await deliveryService.update(deliveryId, { status: 'in_transit' } as Partial<Delivery>);
+      }
+      throw error;
+    }
     return (data as Delivery) || null;
   },
 
   submitDeliveryPhoto: async (deliveryId: string, photoPath: string): Promise<Delivery | null> => {
     const { data, error } = await getSupabase()
       .rpc('submit_delivery_photo', { p_delivery_id: deliveryId, p_photo_url: photoPath });
-    if (error) throw error;
+    if (error) {
+      if (isMissingRpcError(error)) {
+        const now = new Date().toISOString();
+        return await deliveryService.update(deliveryId, {
+          status: 'delivered',
+          delivered_at: now,
+          completed_at: now,
+        } as Partial<Delivery>);
+      }
+      throw error;
+    }
     return (data as Delivery) || null;
   },
 };

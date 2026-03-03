@@ -8,7 +8,7 @@ export type DeliveryStatus = 'pending' | 'offered' | 'accepted' | 'picked_up' | 
 
 export type SubscriptionTier = 'monthly' | 'annual' | 'none';
 
-export type PaymentMethod = 'subscription' | 'wallet' | 'pack' | 'payg';
+export type PaymentMethod = 'subscription' | 'wallet' | 'pack' | 'payg' | 'cod';
 
 export interface User {
   id: string;
@@ -57,11 +57,13 @@ export interface Delivery {
   rider_id: string | null;
   rider_name: string | null;
   pickup_address: string;
-  pickup_lat: number;
-  pickup_lng: number;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
   dropoff_address: string;
-  dropoff_lat: number;
-  dropoff_lng: number;
+  dropoff_phone: string | null;
+  note: string | null;
+  dropoff_lat: number | null;
+  dropoff_lng: number | null;
   estimated_duration: number; // minutes
   actual_duration: number | null; // minutes
   price: number; // MAD
@@ -71,6 +73,7 @@ export interface Delivery {
   created_at: string;
   accepted_at: string | null;
   picked_up_at: string | null;
+  delivered_at?: string | null;
   completed_at: string | null;
 }
 

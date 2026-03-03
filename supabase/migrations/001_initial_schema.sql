@@ -20,7 +20,7 @@ create table public.profiles (
 
 -- Businesses
 create table public.businesses (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
   name text not null,
   subscription_tier text default 'none' check (subscription_tier in ('monthly', 'annual', 'none')),
@@ -33,7 +33,7 @@ create table public.businesses (
 
 -- Riders
 create table public.riders (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
   name text not null,
   phone text not null default '',
@@ -48,7 +48,7 @@ create table public.riders (
 
 -- Deliveries
 create table public.deliveries (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   business_id uuid references public.businesses(id) on delete cascade not null,
   rider_id uuid references public.riders(id) on delete set null,
   pickup_address text not null,
@@ -71,7 +71,7 @@ create table public.deliveries (
 
 -- Transactions
 create table public.transactions (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
   type text not null check (type in ('subscription', 'top_up', 'commission', 'payout', 'delivery_charge')),
   amount numeric(10,2) not null,
@@ -83,7 +83,7 @@ create table public.transactions (
 
 -- Rider locations (tracking history)
 create table public.rider_locations (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   rider_id uuid references public.riders(id) on delete cascade not null,
   location jsonb not null,
   heading double precision default 0,

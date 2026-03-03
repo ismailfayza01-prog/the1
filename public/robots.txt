@@ -1,0 +1,39 @@
+# The 1000 — B2B Courier Marketplace, Tangier, Morocco
+# https://the1000.ma
+
+User-agent: *
+Allow: /
+
+# Allow all major AI search bots explicitly
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+# Block training-only crawlers (not search bots)
+User-agent: CCBot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+Sitemap: https://the1000.ma/sitemap.xml

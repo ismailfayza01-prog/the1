@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(command -v gh:*)",
+      "Bash(git remote get-url:*)",
+      "Bash(gh pr list:*)",
+      "Bash(curl:*)",
+      "mcp__plugin_playwright_playwright__browser_run_code",
+      "Bash(git clone:*)",
+      "Bash(node -e:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx next build:*)",
+      "Bash(./node_modules/.bin/next build:*)",
+      "Bash(npm install:*)",
+      "Bash(node_modules/.bin/next build:*)"
+    ]
+  }
+}

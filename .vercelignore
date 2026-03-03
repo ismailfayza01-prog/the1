@@ -1,0 +1,10 @@
+.tools
+.git
+.next
+node_modules
+node_modules_stale_*
+.claude
+.agents
+funding-dossier
+marketingskills
+design-preview-full.png

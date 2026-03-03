@@ -3,8 +3,18 @@
 -- ============================================
 
 -- 1) Ensure riders.user_id is canonical mapping
-alter table public.riders
-  add constraint if not exists riders_user_id_unique unique (user_id);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'riders_user_id_unique'
+      and conrelid = 'public.riders'::regclass
+  ) then
+    alter table public.riders
+      add constraint riders_user_id_unique unique (user_id);
+  end if;
+end $$;
 
 -- 2) Expand delivery status taxonomy (single source of truth)
 alter table public.deliveries
@@ -17,7 +27,7 @@ alter table public.deliveries
 
 -- 3) Delivery offers table (rider_user_id is canonical)
 create table if not exists public.delivery_offers (
-  id uuid default uuid_generate_v4() primary key,
+  id uuid default gen_random_uuid() primary key,
   delivery_id uuid references public.deliveries(id) on delete cascade not null,
   rider_user_id uuid references auth.users(id) on delete cascade not null,
   status text not null check (status in ('offered', 'accepted', 'rejected', 'expired')),
@@ -176,7 +186,7 @@ begin
   foreach offer_row in array (
     select row(o.*)::public.delivery_offers from (
       select
-        uuid_generate_v4() as id,
+        gen_random_uuid() as id,
         p_delivery_id as delivery_id,
         candidate_user_ids[i] as rider_user_id,
         'offered'::text as status,

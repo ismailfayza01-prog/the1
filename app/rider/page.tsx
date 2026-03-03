@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { userService } from '@/lib/storage';
 import { Users, ArrowLeft, AlertCircle, DollarSign, TrendingUp, Zap } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 import Link from 'next/link';
 
 export default function RiderLoginPage() {
@@ -47,7 +48,7 @@ export default function RiderLoginPage() {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Left decorative panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-slate-900">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-20 left-20 h-72 w-72 rounded-full bg-white blur-3xl" />
           <div className="absolute bottom-20 right-20 h-48 w-48 rounded-full bg-white blur-3xl" />
@@ -60,8 +61,8 @@ export default function RiderLoginPage() {
             </Link>
           </div>
           <div>
-            <div className="rounded-2xl bg-white/10 backdrop-blur p-5 w-fit mb-8">
-              <Users className="h-12 w-12 text-white" />
+            <div className="mb-8 rounded-2xl bg-white/10 backdrop-blur p-4 w-fit">
+              <BrandLogo withText={false} imageClassName="h-14 w-14 rounded-2xl" />
             </div>
             <h2 className="text-4xl font-extrabold mb-4">Rider App</h2>
             <p className="text-white/70 text-lg leading-relaxed max-w-sm">
@@ -118,9 +119,7 @@ export default function RiderLoginPage() {
 
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="rounded-2xl bg-emerald-100 p-3">
-                <Users className="h-7 w-7 text-emerald-600" />
-              </div>
+              <BrandLogo withText={false} imageClassName="h-14 w-14 rounded-2xl shadow-sm" />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-emerald-500">Rider App</p>
                 <h1 className="text-2xl font-extrabold text-foreground">Sign In</h1>
@@ -165,7 +164,7 @@ export default function RiderLoginPage() {
 
               <Button
                 type="submit"
-                className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-md shadow-emerald-200 transition-all"
+                className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-slate-800 hover:from-emerald-600 hover:to-slate-900 text-white font-semibold shadow-md shadow-emerald-200 transition-all"
               >
                 Sign In to App
               </Button>
