@@ -1164,7 +1164,7 @@ export default function RiderDashboardPage() {
               <Badge className="border bg-sky-100 text-sky-700 border-sky-200">Pickup</Badge>
               <Badge className="border bg-red-100 text-red-700 border-red-200">Dropoff</Badge>
             </div>
-            <div className="h-[420px] rounded-2xl border border-border overflow-hidden bg-slate-50 relative">
+            <div className="h-[420px] rounded-2xl border border-border bg-slate-50 relative">
               {/* Next maneuver chip — top-left overlay */}
               {navigationRoute?.ok && routeSteps.length > 0 && (
                 <div className="absolute top-3 left-3 z-10 max-w-[75%]">
