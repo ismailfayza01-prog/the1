@@ -491,7 +491,10 @@ export default function BusinessDashboardPage() {
     const prevOrigin = riderEtaOriginRef.current;
     const movedEnough = !prevOrigin || haversineMeters(prevOrigin, riderLoc) > 100;
 
-    if (!movedEnough && riderEtaSeconds !== null) {
+    if (!movedEnough) {
+      // Rider hasn't moved 100m — just re-start the interval without re-fetching OSRM.
+      // The interval uses a functional updater so it always reads the latest state value,
+      // avoiding stale closure issues even though riderEtaSeconds is not in the dep array.
       riderEtaIntervalRef.current = setInterval(() => {
         setRiderEtaSeconds((prev) => (prev === null || prev <= 0 ? 0 : prev - 1));
       }, 1000);
@@ -544,6 +547,8 @@ export default function BusinessDashboardPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // riderEtaSeconds intentionally excluded: interval uses functional updater (prev =>) to
+    // read latest state, avoiding stale closure. Including it would cause infinite re-runs.
   }, [deliveries, allRiders]);
 
   const loadData = async (userId: string) => {
