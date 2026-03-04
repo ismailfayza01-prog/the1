@@ -10,7 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { userService, riderService, deliveryService } from '@/lib/storage';
 import { createClient } from '@/lib/supabase/client';
-import { getRiderCommission } from '@/lib/types';
+import {
+  getRiderCommission,
+  RIDER_COMMISSION_BASE,
+  RIDER_COMMISSION_MAX,
+  RIDER_COMMISSION_STEP,
+  RIDER_COMMISSION_STEP_DELIVERIES,
+} from '@/lib/types';
 import type { LatLng, RouteResponse } from '@/lib/navigation/types';
 import { MAP_3D_ENABLED } from '@/components/maps/config';
 import { RiderMap3D } from '@/components/maps/RiderMap3D';
@@ -31,6 +37,7 @@ import {
 } from 'lucide-react';
 import type { User, Rider, Delivery, DeliveryOffer } from '@/lib/types';
 import Link from 'next/link';
+import { haversineMeters } from '@/lib/geo';
 
 const MAP_BOUNDS = { latMin: 35.74, latMax: 35.79, lngMin: -5.86, lngMax: -5.8 };
 const ROUTING_ENABLED = process.env.NEXT_PUBLIC_ROUTING_ENABLED !== 'false';
@@ -60,20 +67,8 @@ function formatEtaCountdown(seconds: number): string {
   return `${m} min ${s.toString().padStart(2, '0')} sec`;
 }
 
-function haversineDistanceMeters(a: LatLng, b: LatLng): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const earth = 6_371_000;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-
-  const sinLat = Math.sin(dLat / 2);
-  const sinLng = Math.sin(dLng / 2);
-  const x = sinLat * sinLat + sinLng * sinLng * Math.cos(lat1) * Math.cos(lat2);
-  const y = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-
-  return earth * y;
+function formatCommissionMad(value: number): string {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(1);
 }
 
 function getNavigationStage(status: Delivery['status']): NavigationStage {
@@ -640,10 +635,10 @@ export default function RiderDashboardPage() {
       !!previous &&
       previous.deliveryId === routeDelivery.id &&
       previous.stage === stage &&
-      haversineDistanceMeters(previous.destination, destination) < 10;
+      haversineMeters(previous.destination, destination) < 10;
 
     if (sameDeliveryAndStage) {
-      const moved = haversineDistanceMeters(previous.origin, origin);
+      const moved = haversineMeters(previous.origin, origin);
       if (moved <= ROUTE_RECALC_DISTANCE_M) {
         return;
       }
@@ -897,6 +892,21 @@ export default function RiderDashboardPage() {
   const handleUploadPhoto = async (deliveryId: string, file: File) => {
     setPhotoUploading(true);
     setPhotoError('');
+
+    const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+
+    if (!ALLOWED_MIME.includes(file.type)) {
+      setPhotoError('Only JPEG, PNG, and WebP images are allowed');
+      setPhotoUploading(false);
+      return;
+    }
+    if (file.size > MAX_SIZE) {
+      setPhotoError('File too large (max 10 MB)');
+      setPhotoUploading(false);
+      return;
+    }
+
     try {
       const supabase = createClient();
       const key = `${deliveryId}/${crypto.randomUUID()}.jpg`;
@@ -938,6 +948,13 @@ export default function RiderDashboardPage() {
     if (!rider) return;
     const delivery = deliveries.find(d => d.id === deliveryId);
     if (!delivery) return;
+
+    // Guard: require either OTP verified or photo uploaded before completing
+    const hasProof = delivery.pod_photo_url || delivery.pod_otp_verified_at;
+    if (!hasProof) {
+      setPhotoError('Please verify OTP or upload a delivery photo before marking as delivered.');
+      return;
+    }
 
     const actualDuration = delivery.picked_up_at
       ? Math.round((Date.now() - new Date(delivery.picked_up_at).getTime()) / 60000)
@@ -1034,6 +1051,16 @@ export default function RiderDashboardPage() {
   const activeDelivery = deliveries.find(d => ['accepted', 'picked_up', 'in_transit'].includes(d.status));
   const assignedPendingDelivery = deliveries.find(d => d.status === 'pending');
   const completedDeliveries = deliveries.filter(d => d.status === 'delivered');
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const nextMonthStart = new Date(monthStart);
+  nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
+  const monthlyCompletedDeliveries = completedDeliveries.filter((delivery) => {
+    const completedAt = delivery.completed_at ?? delivery.delivered_at ?? delivery.created_at;
+    const completedDate = new Date(completedAt);
+    return completedDate >= monthStart && completedDate < nextMonthStart;
+  }).length;
   const navigationDelivery = activeDelivery ?? assignedPendingDelivery ?? null;
   const navigationStage = navigationDelivery ? getNavigationStage(navigationDelivery.status) : null;
   const navigationTarget = navigationDelivery && navigationStage
@@ -1044,11 +1071,26 @@ export default function RiderDashboardPage() {
   const externalLinks = navigationRoute?.fallback_links ?? fallbackLinks;
   const routeSteps = navigationRoute?.steps?.slice(0, 5) ?? [];
 
-  const currentTier = getRiderCommission(rider.total_deliveries);
-  const nextTier = rider.total_deliveries < 31 ? 31 : rider.total_deliveries < 71 ? 71 : rider.total_deliveries < 200 ? 200 : 200;
-  const progressToNextTier = rider.total_deliveries < 200
-    ? ((rider.total_deliveries % (nextTier === 31 ? 31 : nextTier === 71 ? 40 : 130)) / (nextTier === 31 ? 31 : nextTier === 71 ? 40 : 130)) * 100
-    : 100;
+  const currentTier = getRiderCommission(monthlyCompletedDeliveries);
+  const maxTierReached = currentTier >= RIDER_COMMISSION_MAX;
+  const deliveriesIntoTier = monthlyCompletedDeliveries % RIDER_COMMISSION_STEP_DELIVERIES;
+  const deliveriesToNextTier = deliveriesIntoTier === 0
+    ? RIDER_COMMISSION_STEP_DELIVERIES
+    : RIDER_COMMISSION_STEP_DELIVERIES - deliveriesIntoTier;
+  const nextTierAt = monthlyCompletedDeliveries + deliveriesToNextTier;
+  const progressToNextTier = maxTierReached
+    ? 100
+    : (deliveriesIntoTier / RIDER_COMMISSION_STEP_DELIVERIES) * 100;
+  const commissionTierCount = Math.round((RIDER_COMMISSION_MAX - RIDER_COMMISSION_BASE) / RIDER_COMMISSION_STEP) + 1;
+  const tierPreview = Array.from({ length: commissionTierCount }, (_, idx) => {
+    const threshold = idx * RIDER_COMMISSION_STEP_DELIVERIES;
+    const isLastTier = idx === commissionTierCount - 1;
+    return {
+      label: `${formatCommissionMad(getRiderCommission(threshold))} MAD`,
+      range: isLastTier ? `${threshold}+` : `${threshold}-${threshold + (RIDER_COMMISSION_STEP_DELIVERIES - 1)}`,
+      active: monthlyCompletedDeliveries >= threshold,
+    };
+  });
 
   const statusColors = {
     available: { dot: 'bg-emerald-500', label: 'Online', sub: 'Accepting deliveries', ring: 'ring-emerald-200' },
@@ -1322,14 +1364,21 @@ export default function RiderDashboardPage() {
             </div>
 
             <p className="text-white/70 text-sm mb-4">
-              {rider.total_deliveries} deliveries · {currentTier} MAD per delivery
+              {monthlyCompletedDeliveries} deliveries this month · {formatCommissionMad(currentTier)} MAD per delivery
             </p>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-white/60">Next tier at {nextTier} deliveries</span>
-                <span className="font-bold text-white">{nextTier - rider.total_deliveries} to go</span>
-              </div>
+              {maxTierReached ? (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-white/60">Max tier unlocked</span>
+                  <span className="font-bold text-white">{formatCommissionMad(RIDER_COMMISSION_MAX)} MAD</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-white/60">Next tier at {nextTierAt} deliveries</span>
+                  <span className="font-bold text-white">{deliveriesToNextTier} to go</span>
+                </div>
+              )}
               <div className="h-2 w-full bg-white/20 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-white transition-all duration-700 rounded-full"
@@ -1339,13 +1388,8 @@ export default function RiderDashboardPage() {
             </div>
 
             {/* Commission tier indicators */}
-            <div className="mt-4 grid grid-cols-4 gap-1.5">
-              {[
-                { label: '14 MAD', range: '0-30', active: rider.total_deliveries >= 0 },
-                { label: '15 MAD', range: '31-70', active: rider.total_deliveries >= 31 },
-                { label: '16 MAD', range: '71-199', active: rider.total_deliveries >= 71 },
-                { label: '17 MAD', range: '200+', active: rider.total_deliveries >= 200 },
-              ].map((tier, i) => (
+            <div className="mt-4 grid grid-cols-5 gap-1.5">
+              {tierPreview.map((tier, i) => (
                 <div key={i} className={`rounded-lg p-2 text-center ${tier.active ? 'bg-white/20' : 'bg-white/10'}`}>
                   <p className={`text-xs font-bold ${tier.active ? 'text-white' : 'text-white/50'}`}>{tier.label}</p>
                   <p className={`text-xs ${tier.active ? 'text-white/60' : 'text-white/30'}`}>{tier.range}</p>
@@ -1529,7 +1573,7 @@ export default function RiderDashboardPage() {
                         <div className="grid grid-cols-2 gap-2">
                           <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-2.5 text-center">
                             <p className="text-xs text-muted-foreground">You earn</p>
-                            <p className="text-base font-bold text-emerald-600">{currentTier} MAD</p>
+                            <p className="text-base font-bold text-emerald-600">{formatCommissionMad(currentTier)} MAD</p>
                           </div>
                           <div className="rounded-xl bg-slate-50 border border-slate-100 p-2.5 text-center">
                             <p className="text-xs text-muted-foreground">Est. time</p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,14 +13,40 @@ import { BusinessMap3D } from '@/components/maps/BusinessMap3D';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Package, CreditCard, LogOut,
-  Home, Wallet, X, Bike, Receipt, AlertCircle, CheckCircle2,
+  Home, Wallet, X, Bike, Receipt, CheckCircle2,
 } from 'lucide-react';
-import type { User, Business, Delivery, Rider } from '@/lib/types';
+import {
+  getRiderCommission,
+  getWalletUnitRate,
+  type User,
+  type Business,
+  type Delivery,
+  type Rider,
+  type SubscriptionTier,
+} from '@/lib/types';
 import Link from 'next/link';
+import { haversineMeters } from '@/lib/geo';
 
 // Tangier bounding box
-const MAP_BOUNDS = { latMin: 35.74, latMax: 35.79, lngMin: -5.86, lngMax: -5.80 };
-const BIZ_LOCATION = { lat: 35.7595, lng: -5.8340 };
+const MAP_BOUNDS = { latMin: 35.65, latMax: 35.83, lngMin: -5.98, lngMax: -5.70 };
+const DEFAULT_BIZ_LOCATION = { lat: 35.7595, lng: -5.8340 };
+const NEARBY_RIDER_RADIUS_METERS = 5000;
+const PAY_ON_USE_RATE = 30;
+const PACK_UNIT_RATE = 25;
+
+type BillingMode = 'auto' | 'payg' | 'wallet';
+
+const PACK_TIER_META: Record<Exclude<SubscriptionTier, 'none'>, { label: string; badge?: string }> = {
+  monthly: { label: 'Starter 8' },
+  trimestrial: { label: 'Trimestrial 24' },
+  semestrial: { label: 'Semestrial 48' },
+  annual: { label: 'Annual 96', badge: 'Best value' },
+};
+
+function getPackTierLabel(tier: SubscriptionTier): string {
+  if (tier === 'none') return 'Aucun';
+  return PACK_TIER_META[tier].label;
+}
 
 function seedLocation(id: string): { lat: number; lng: number } {
   let h = 0;
@@ -30,23 +56,32 @@ function seedLocation(id: string): { lat: number; lng: number } {
   return { lat, lng };
 }
 
-function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const earth = 6_371_000;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return earth * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-
 function formatEtaCountdownBiz(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
   const m = Math.floor(safe / 60);
   const s = safe % 60;
   if (m === 0) return `${s} sec`;
   return `${m} min ${s.toString().padStart(2, '0')} sec`;
+}
+
+function getBusinessMapCenter(business: Business | null | undefined): { lat: number; lng: number } {
+  if (business) {
+    const rawLat = business.location_lat as unknown;
+    const rawLng = business.location_lng as unknown;
+    const lat = typeof rawLat === 'string' ? Number(rawLat) : rawLat;
+    const lng = typeof rawLng === 'string' ? Number(rawLng) : rawLng;
+
+    if (
+      typeof lat === 'number' &&
+      Number.isFinite(lat) &&
+      typeof lng === 'number' &&
+      Number.isFinite(lng)
+    ) {
+      return { lat, lng };
+    }
+  }
+
+  return DEFAULT_BIZ_LOCATION;
 }
 
 function getRiderLocation(rider: Rider): { lat: number; lng: number } {
@@ -166,6 +201,7 @@ function EtaCountdownCard({ phase, seconds, distanceM }: EtaCountdownCardProps) 
 
 interface BusinessMapProps {
   riders: Rider[];
+  businessLocation: { lat: number; lng: number };
   selectedRiderId: string | null;
   onSelectRider: (id: string | null) => void;
   pinMode?: 'pickup' | 'dropoff' | null;
@@ -176,6 +212,7 @@ interface BusinessMapProps {
 
 function BusinessMap({
   riders,
+  businessLocation,
   selectedRiderId,
   onSelectRider,
   pinMode = null,
@@ -186,10 +223,11 @@ function BusinessMap({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const leafletRef = useRef<any>(null);
+  const businessMarkerRef = useRef<any>(null);
   const ridersLayerRef = useRef<any>(null);
   const pinsLayerRef = useRef<any>(null);
   const routeLineRef = useRef<any>(null);
-  const didFitBoundsRef = useRef(false);
+  const hadSelectedRouteRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -211,7 +249,7 @@ function BusinessMap({
         [MAP_BOUNDS.latMax, MAP_BOUNDS.lngMax]
       );
 
-      map.fitBounds(tangierBounds, { padding: [24, 24] });
+      map.setView([businessLocation.lat, businessLocation.lng], 14);
       map.setMaxBounds(tangierBounds.pad(0.1));
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -226,7 +264,7 @@ function BusinessMap({
         iconAnchor: [12, 12],
       });
 
-      L.marker([BIZ_LOCATION.lat, BIZ_LOCATION.lng], { icon: businessIcon })
+      businessMarkerRef.current = L.marker([businessLocation.lat, businessLocation.lng], { icon: businessIcon })
         .addTo(map)
         .bindTooltip('Votre adresse', { direction: 'top', offset: [0, -12] });
 
@@ -253,10 +291,20 @@ function BusinessMap({
       ridersLayerRef.current = null;
       pinsLayerRef.current = null;
       routeLineRef.current = null;
+      businessMarkerRef.current = null;
       leafletRef.current = null;
-      didFitBoundsRef.current = false;
+      hadSelectedRouteRef.current = false;
     };
-  }, []);
+  }, [businessLocation.lat, businessLocation.lng]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    map.panTo([businessLocation.lat, businessLocation.lng]);
+    if (businessMarkerRef.current) {
+      businessMarkerRef.current.setLatLng([businessLocation.lat, businessLocation.lng]);
+    }
+  }, [businessLocation]);
 
   useEffect(() => {
     if (!mapRef.current || !leafletRef.current || !ridersLayerRef.current) return;
@@ -285,12 +333,13 @@ function BusinessMap({
     if (selected && routeLine) {
       const selectedLoc = getRiderLocation(selected);
       const latlngs = [
-        [BIZ_LOCATION.lat, BIZ_LOCATION.lng],
+        [businessLocation.lat, businessLocation.lng],
         [selectedLoc.lat, selectedLoc.lng],
       ];
       routeLine.setLatLngs(latlngs);
       const routeBounds = L.latLngBounds(latlngs as [number, number][]);
       map.fitBounds(routeBounds, { padding: [48, 48], maxZoom: 15 });
+      hadSelectedRouteRef.current = true;
       return;
     }
 
@@ -298,16 +347,11 @@ function BusinessMap({
       routeLine.setLatLngs([]);
     }
 
-    if (!didFitBoundsRef.current && riders.length > 0) {
-      const allPoints: [number, number][] = riders.map((r) => {
-        const loc = getRiderLocation(r);
-        return [loc.lat, loc.lng];
-      });
-      allPoints.push([BIZ_LOCATION.lat, BIZ_LOCATION.lng]);
-      map.fitBounds(L.latLngBounds(allPoints), { padding: [48, 48], maxZoom: 14 });
-      didFitBoundsRef.current = true;
+    if (hadSelectedRouteRef.current) {
+      map.setView([businessLocation.lat, businessLocation.lng], 14);
+      hadSelectedRouteRef.current = false;
     }
-  }, [riders, selectedRiderId, onSelectRider]);
+  }, [businessLocation, riders, selectedRiderId, onSelectRider]);
 
   useEffect(() => {
     if (!mapRef.current || !leafletRef.current || !pinsLayerRef.current) return;
@@ -393,9 +437,7 @@ export default function BusinessDashboardPage() {
 
   // Subscription UI state
   const [sidebarTab, setSidebarTab] = useState<'create' | 'track' | 'subscription' | 'wallet' | 'history'>('create');
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual' | null>(null);
-  const [subscribing, setSubscribing] = useState(false);
-  const [subscriptionError, setSubscriptionError] = useState('');
+  const [billingMode, setBillingMode] = useState<BillingMode>('auto');
   const [dispatchingDeliveryId, setDispatchingDeliveryId] = useState<string | null>(null);
   const [nowTs, setNowTs] = useState(Date.now());
   const [otpModalOpen, setOtpModalOpen] = useState(false);
@@ -562,7 +604,26 @@ export default function BusinessDashboardPage() {
   };
 
   const handleLogout = async () => { await userService.logout(); router.push('/business'); };
-  const selectedRider = allRiders.find(r => r.id === selectedRiderId) ?? null;
+  const businessLocation = useMemo(
+    () => getBusinessMapCenter(business),
+    [business?.id, business?.location_lat, business?.location_lng]
+  );
+  const businessMapKey = `${business?.id ?? 'unknown'}:${businessLocation.lat.toFixed(6)}:${businessLocation.lng.toFixed(6)}`;
+  const { sortedAvailableRiders, ridersForMap } = useMemo(() => {
+    const sorted = [...availableRiders].sort((a, b) => {
+      const distA = haversineMeters(getRiderLocation(a), businessLocation);
+      const distB = haversineMeters(getRiderLocation(b), businessLocation);
+      return distA - distB;
+    });
+    const nearby = sorted.filter(
+      (rider) => haversineMeters(getRiderLocation(rider), businessLocation) <= NEARBY_RIDER_RADIUS_METERS
+    );
+    return {
+      sortedAvailableRiders: sorted,
+      ridersForMap: nearby.length > 0 ? nearby : sorted,
+    };
+  }, [availableRiders, businessLocation]);
+  const selectedRider = ridersForMap.find(r => r.id === selectedRiderId) ?? allRiders.find(r => r.id === selectedRiderId) ?? null;
 
   const handleMapPin = (lat: number, lng: number) => {
     const coordLabel = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
@@ -584,25 +645,48 @@ export default function BusinessDashboardPage() {
     try {
       const preferredRiderUserId = selectedRider?.user_id ?? null;
       let dispatchConfirmed = false;
+      const ridesRemainingNow = Math.max(0, business.rides_total - business.rides_used);
+      const hasPackCredits = business.subscription_tier !== 'none' && ridesRemainingNow > 0;
+      const walletUnitRate = getWalletUnitRate(business.wallet_balance);
+
+      let paymentMethod: Delivery['payment_method'] = 'payg';
+      let deliveryPrice = PAY_ON_USE_RATE;
+
+      if (hasPackCredits) {
+        paymentMethod = 'pack';
+        deliveryPrice = PACK_UNIT_RATE;
+      } else if (billingMode === 'wallet') {
+        if (business.wallet_balance < walletUnitRate) {
+          throw new Error(`Solde wallet insuffisant. Minimum requis: ${walletUnitRate} MAD.`);
+        }
+        paymentMethod = 'wallet';
+        deliveryPrice = walletUnitRate;
+      } else if (billingMode === 'auto') {
+        if (business.wallet_balance >= walletUnitRate && business.wallet_balance > 0) {
+          paymentMethod = 'wallet';
+          deliveryPrice = walletUnitRate;
+        }
+      }
+
       const created = await deliveryService.create({
         business_id: business.id,
         business_name: business.name,
         rider_id: null,
         rider_name: null,
         pickup_address: pickupAddress || `${business.name} (pickup)`,
-        pickup_lat: pickupCoords?.lat ?? (BIZ_LOCATION.lat + (Math.random() - 0.5) * 0.01),
-        pickup_lng: pickupCoords?.lng ?? (BIZ_LOCATION.lng + (Math.random() - 0.5) * 0.01),
+        pickup_lat: pickupCoords?.lat ?? (businessLocation.lat + (Math.random() - 0.5) * 0.01),
+        pickup_lng: pickupCoords?.lng ?? (businessLocation.lng + (Math.random() - 0.5) * 0.01),
         dropoff_address: dropoffAddress,
         dropoff_phone: dropoffPhone,
         note: deliveryNote || null,
-        dropoff_lat: dropoffCoords?.lat ?? (BIZ_LOCATION.lat + (Math.random() - 0.5) * 0.02),
-        dropoff_lng: dropoffCoords?.lng ?? (BIZ_LOCATION.lng + (Math.random() - 0.5) * 0.02),
+        dropoff_lat: dropoffCoords?.lat ?? (businessLocation.lat + (Math.random() - 0.5) * 0.02),
+        dropoff_lng: dropoffCoords?.lng ?? (businessLocation.lng + (Math.random() - 0.5) * 0.02),
         estimated_duration: 15 + Math.floor(Math.random() * 20),
         actual_duration: null,
-        price: business.subscription_tier !== 'none' ? 0 : 25,
-        rider_commission: 15,
+        price: deliveryPrice,
+        rider_commission: getRiderCommission(0),
         status: 'pending',
-        payment_method: business.subscription_tier !== 'none' ? 'subscription' : 'payg',
+        payment_method: paymentMethod,
         accepted_at: null,
         picked_up_at: null,
         completed_at: null,
@@ -615,7 +699,7 @@ export default function BusinessDashboardPage() {
         console.error('Auto-dispatch error', dispatchErr);
       }
 
-      if (business.subscription_tier !== 'none') await businessService.useRide(business.id);
+      if (paymentMethod === 'pack') await businessService.useRide(business.id);
       await loadData(currentUser!.id);
       setPickupAddress('');
       setDropoffAddress('');
@@ -627,11 +711,14 @@ export default function BusinessDashboardPage() {
       setSelectedRiderId(null);
       setSuccessMsg(
         dispatchConfirmed
-          ? 'Livraison créée et dispatch envoyée au rider.'
-          : 'Livraison créée. Aucun rider disponible maintenant, utilisez Track > Dispatch.'
+          ? `Livraison creee (${paymentMethod === 'pack' ? `Pack ${deliveryPrice} MAD` : paymentMethod === 'wallet' ? `Wallet+ ${deliveryPrice} MAD` : `Pay on Use ${deliveryPrice} MAD`}) et dispatch envoyee au rider.`
+          : `Livraison creee (${paymentMethod === 'pack' ? `Pack ${deliveryPrice} MAD` : paymentMethod === 'wallet' ? `Wallet+ ${deliveryPrice} MAD` : `Pay on Use ${deliveryPrice} MAD`}). Aucun rider disponible maintenant, utilisez Track > Dispatch.`
       );
       setTimeout(() => setSuccessMsg(''), 4000);
       setSidebarTab('track');
+    } catch (err) {
+      setSuccessMsg(err instanceof Error ? err.message : 'Erreur lors de la creation de livraison');
+      setTimeout(() => setSuccessMsg(''), 4000);
     } finally {
       setSubmitting(false);
     }
@@ -689,34 +776,24 @@ export default function BusinessDashboardPage() {
     window.open(data.signedUrl, '_blank');
   };
 
-  const handleSubscribe = async (tier: 'monthly' | 'annual') => {
-    if (!business || !currentUser) return;
-    setSubscribing(true);
-    setSubscriptionError('');
-    try {
-      const success = await businessService.subscribe(business.id, tier, currentUser.id);
-      if (success) {
-        setSelectedPlan(null);
-        setSuccessMsg(`Abonnement ${tier === 'monthly' ? 'mensuel' : 'annuel'} activé !`);
-        await loadData(currentUser.id);
-        setTimeout(() => setSuccessMsg(''), 4000);
-        setSidebarTab('wallet');
-      } else {
-        setSubscriptionError('Erreur lors de l\'activation');
-      }
-    } catch (err) {
-      setSubscriptionError(err instanceof Error ? err.message : 'Erreur inconnue');
-    } finally {
-      setSubscribing(false);
-    }
-  };
-
   if (!currentUser || !business) return <LoadingSkeleton />;
 
   const activeDeliveries = deliveries.filter(d => ['pending', 'offered', 'accepted', 'picked_up', 'in_transit'].includes(d.status));
   const completedDeliveries = deliveries.filter(d => ['delivered', 'cancelled', 'expired'].includes(d.status));
   const trackDeliveries = deliveries.filter(d => ['pending', 'offered', 'accepted', 'picked_up', 'in_transit'].includes(d.status));
-  const ridesRemaining = business.rides_total - business.rides_used;
+  const ridesRemaining = Math.max(0, business.rides_total - business.rides_used);
+  const hasActivePackCredits = business.subscription_tier !== 'none' && ridesRemaining > 0;
+  const walletUnitRate = getWalletUnitRate(business.wallet_balance);
+  const autoBillingPreview = hasActivePackCredits
+    ? `Pack credit (${PACK_UNIT_RATE} MAD/ride effective)`
+    : business.wallet_balance >= walletUnitRate && business.wallet_balance > 0
+      ? `Wallet+ ${walletUnitRate} MAD`
+      : `Pay on Use ${PAY_ON_USE_RATE} MAD`;
+  const billingPreview = billingMode === 'auto'
+    ? autoBillingPreview
+    : billingMode === 'wallet'
+      ? `Wallet+ ${walletUnitRate} MAD`
+      : `Pay on Use ${PAY_ON_USE_RATE} MAD`;
 
   const getDispatchCountdown = (createdAt: string) => {
     const remainingMs = 90000 - (nowTs - new Date(createdAt).getTime());
@@ -789,7 +866,7 @@ export default function BusinessDashboardPage() {
           {/* Stats Grid */}
           <div className="grid grid-cols-3 gap-3 lg:gap-4 flex-shrink-0">
             {[
-              { label: 'Abonnement', value: business.subscription_tier === 'none' ? 'Aucun' : business.subscription_tier === 'monthly' ? 'Mensuel' : 'Annuel', icon: <CreditCard size={14} />, color: 'text-sky-500' },
+              { label: 'Pack', value: getPackTierLabel(business.subscription_tier), icon: <CreditCard size={14} />, color: 'text-sky-500' },
               { label: 'Courses', value: `${ridesRemaining}/${business.rides_total}`, icon: <Package size={14} />, color: 'text-violet-500' },
               { label: 'Wallet', value: `${business.wallet_balance} MAD`, icon: <Wallet size={14} />, color: 'text-emerald-500' },
             ].map(s => (
@@ -813,7 +890,7 @@ export default function BusinessDashboardPage() {
             <div className="flex gap-2">
               {[
                 { color: 'bg-sky-400', label: 'Votre adresse' },
-                { color: 'bg-emerald-500', label: `${availableRiders.length} rider${availableRiders.length !== 1 ? 's' : ''}` },
+                { color: 'bg-emerald-500', label: `${ridersForMap.length} nearby rider${ridersForMap.length !== 1 ? 's' : ''}` },
               ].map(l => (
                 <div key={l.label} className="flex items-center gap-2 bg-white border border-border rounded-full px-3 py-1 text-xs text-foreground whitespace-nowrap">
                   <div className={`w-1.5 h-1.5 rounded-full ${l.color}`} />
@@ -832,7 +909,9 @@ export default function BusinessDashboardPage() {
           <div className="flex-1 bg-gray-50 border border-border rounded-2xl overflow-hidden min-h-0">
             {MAP_3D_ENABLED ? (
               <BusinessMap3D
-                riders={availableRiders}
+                key={`3d-${businessMapKey}`}
+                riders={ridersForMap}
+                businessLocation={businessLocation}
                 selectedRiderId={selectedRiderId}
                 onSelectRider={setSelectedRiderId}
                 pinMode={sidebarTab === 'create' ? pinMode : null}
@@ -842,7 +921,9 @@ export default function BusinessDashboardPage() {
                 className="w-full h-full rounded-2xl"
                 fallback={(
                   <BusinessMap
-                    riders={availableRiders}
+                    key={`2d-fallback-${businessMapKey}`}
+                    riders={ridersForMap}
+                    businessLocation={businessLocation}
                     selectedRiderId={selectedRiderId}
                     onSelectRider={setSelectedRiderId}
                     pinMode={sidebarTab === 'create' ? pinMode : null}
@@ -854,7 +935,9 @@ export default function BusinessDashboardPage() {
               />
             ) : (
               <BusinessMap
-                riders={availableRiders}
+                key={`2d-${businessMapKey}`}
+                riders={ridersForMap}
+                businessLocation={businessLocation}
                 selectedRiderId={selectedRiderId}
                 onSelectRider={setSelectedRiderId}
                 pinMode={sidebarTab === 'create' ? pinMode : null}
@@ -920,8 +1003,8 @@ export default function BusinessDashboardPage() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <span className="hidden sm:inline">Plan</span>
-              <span className="sm:hidden text-xs">Plan</span>
+              <span className="hidden sm:inline">Subscription</span>
+              <span className="sm:hidden text-xs">Sub</span>
             </button>
             <button
               onClick={() => setSidebarTab('wallet')}
@@ -1061,6 +1144,42 @@ export default function BusinessDashboardPage() {
                     />
                   </div>
 
+                  <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+                    <div className="text-xs font-semibold text-foreground">Facturation</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={billingMode === 'auto' ? 'default' : 'outline'}
+                        onClick={() => setBillingMode('auto')}
+                      >
+                        Auto
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={billingMode === 'payg' ? 'default' : 'outline'}
+                        onClick={() => setBillingMode('payg')}
+                      >
+                        Pay on Use
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={billingMode === 'wallet' ? 'default' : 'outline'}
+                        onClick={() => setBillingMode('wallet')}
+                      >
+                        Wallet+
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Tarif applique: {billingPreview}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Pack: {hasActivePackCredits ? `${ridesRemaining} credits restants` : 'aucun credit actif'} · Wallet: {business.wallet_balance} MAD
+                    </p>
+                  </div>
+
                   <Button
                     type="submit"
                     disabled={submitting || !dropoffAddress || !dropoffPhone}
@@ -1192,53 +1311,38 @@ export default function BusinessDashboardPage() {
                 {/* Current Status */}
                 {business.subscription_tier !== 'none' && (
                   <div className="bg-sky-50 border border-sky-200 rounded-lg p-4">
-                    <div className="text-xs text-sky-600 font-semibold uppercase mb-2">Abonnement actif</div>
-                    <div className="text-sm font-bold text-sky-700 mb-2">{business.subscription_tier === 'monthly' ? 'Mensuel' : 'Annuel'}</div>
+                    <div className="text-xs text-sky-600 font-semibold uppercase mb-2">Pack actif</div>
+                    <div className="text-sm font-bold text-sky-700 mb-2">{getPackTierLabel(business.subscription_tier)}</div>
                     <div className="text-xs text-sky-600 mb-1">Renouvellement: {new Date(business.renewal_date || '').toLocaleDateString('fr-FR')}</div>
-                    <div className="text-xs text-sky-600">{business.rides_total - business.rides_used} / {business.rides_total} courses restantes</div>
+                    <div className="text-xs text-sky-600">{ridesRemaining} / {business.rides_total} courses restantes</div>
+                    <div className="text-xs text-sky-700 mt-2">Tarif pack effectif: {PACK_UNIT_RATE} MAD / course</div>
+                    {!hasActivePackCredits && (
+                      <div className="text-xs text-amber-700 mt-2">Pack epuise. Rechargez un nouveau pack.</div>
+                    )}
                   </div>
                 )}
-
-                {/* Plan Selection */}
-                {subscriptionError && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-start gap-2">
-                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-                    {subscriptionError}
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {/* Monthly Plan */}
-                  <div className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:border-sky-300 transition-colors">
-                    <div className="text-sm font-bold text-foreground mb-2">Plan Mensuel</div>
-                    <div className="text-lg font-bold text-sky-600 mb-2">200 MAD</div>
-                    <div className="text-xs text-muted-foreground mb-4">8 courses / 30 jours</div>
-                    <Button
-                      onClick={() => handleSubscribe('monthly')}
-                      disabled={subscribing || business.subscription_tier !== 'none'}
-                      className="w-full"
-                      variant={selectedPlan === 'monthly' ? 'default' : 'outline'}
-                    >
-                      {subscribing && selectedPlan === 'monthly' ? 'Activation...' : 'Choisir'}
-                    </Button>
-                  </div>
-
-                  {/* Annual Plan */}
-                  <div className="bg-white border-2 border-emerald-200 rounded-lg p-4 hover:border-emerald-400 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="text-sm font-bold text-foreground">Plan Annuel</div>
-                      <div className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded">Économise 600 MAD</div>
+                {business.subscription_tier === 'none' && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <div className="text-xs text-slate-600 font-semibold uppercase mb-2">No active pack</div>
+                    <div className="text-sm text-slate-700">
+                      Your subscription pack is assigned by admin.
                     </div>
-                    <div className="text-lg font-bold text-emerald-600 mb-2">1800 MAD</div>
-                    <div className="text-xs text-muted-foreground mb-4">96 courses / 365 jours</div>
-                    <Button
-                      onClick={() => handleSubscribe('annual')}
-                      disabled={subscribing || business.subscription_tier !== 'none'}
-                      className={`w-full ${selectedPlan === 'annual' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
-                      variant={selectedPlan === 'annual' ? 'default' : 'outline'}
-                    >
-                      {subscribing && selectedPlan === 'annual' ? 'Activation...' : 'Choisir'}
-                    </Button>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+                  <div className="text-xs font-semibold uppercase text-emerald-700 mb-2">Pricing ladder</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Pay on Use: {PAY_ON_USE_RATE} MAD</div>
+                    <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Pack Credits: {PACK_UNIT_RATE} MAD</div>
+                    <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Wallet+: 25 / 22 / 20 / 18 MAD</div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
+                  Plan choice is disabled in the business portal.
+                  <div className="mt-1 text-xs text-sky-600">
+                    Contact admin to activate or change your subscription pack.
                   </div>
                 </div>
               </div>
@@ -1326,3 +1430,4 @@ export default function BusinessDashboardPage() {
     </div>
   );
 }
+

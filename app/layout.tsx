@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { Syne, DM_Sans } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { LanguageProvider } from '@/components/i18n/language-provider';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import './globals.css'
 
 const syne = Syne({
@@ -165,7 +167,11 @@ export default function RootLayout({
         />
       </head>
       <body className={dmSans.className}>
-        {children}
+        <ErrorBoundary>
+          <LanguageProvider>
+            {children}
+          </LanguageProvider>
+        </ErrorBoundary>
         <Analytics />
       </body>
     </html>

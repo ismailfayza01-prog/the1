@@ -6,7 +6,7 @@ export type RiderStatus = 'available' | 'busy' | 'offline';
 
 export type DeliveryStatus = 'pending' | 'offered' | 'accepted' | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled' | 'expired';
 
-export type SubscriptionTier = 'monthly' | 'annual' | 'none';
+export type SubscriptionTier = 'monthly' | 'trimestrial' | 'semestrial' | 'annual' | 'none';
 
 export type PaymentMethod = 'subscription' | 'wallet' | 'pack' | 'payg' | 'cod';
 
@@ -22,6 +22,10 @@ export interface Business {
   id: string;
   user_id: string;
   name: string;
+  address?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  location_pinned_at?: string | null;
   subscription_tier: SubscriptionTier;
   rides_used: number;
   rides_total: number;
@@ -75,6 +79,8 @@ export interface Delivery {
   picked_up_at: string | null;
   delivered_at?: string | null;
   completed_at: string | null;
+  pod_photo_url?: string | null;
+  pod_otp_verified_at?: string | null;
 }
 
 export interface Transaction {
@@ -111,36 +117,52 @@ export interface RiderLocation {
 }
 
 // Helper functions
+export const RIDER_COMMISSION_BASE = 12.5;
+export const RIDER_COMMISSION_STEP = 0.5;
+export const RIDER_COMMISSION_STEP_DELIVERIES = 20;
+export const RIDER_COMMISSION_MAX = 17;
+
 export function getRiderCommission(monthlyDeliveries: number): number {
-  if (monthlyDeliveries >= 200) return 17;
-  if (monthlyDeliveries >= 71) return 16;
-  if (monthlyDeliveries >= 31) return 15;
-  return 14;
+  const deliveries = Math.max(0, Math.floor(monthlyDeliveries));
+  const steps = Math.floor(deliveries / RIDER_COMMISSION_STEP_DELIVERIES);
+  const uncapped = RIDER_COMMISSION_BASE + (steps * RIDER_COMMISSION_STEP);
+  return Math.min(RIDER_COMMISSION_MAX, uncapped);
 }
 
 export function calculateDeliveryPrice(durationMinutes: number, paymentMethod: PaymentMethod): number {
-  const hours = durationMinutes / 60;
-  
+  const halfHourUnits = Math.max(1, Math.ceil(durationMinutes / 30));
+
   switch (paymentMethod) {
     case 'subscription':
       return 0; // Covered by subscription
     case 'wallet':
-      return Math.ceil(hours * 2) * 18; // 18 MAD per 30 min
+      return halfHourUnits * 18; // Wallet+ floor rate (volume tiers can be higher)
     case 'pack':
-      return Math.ceil(hours * 2) * 20; // 20 MAD per 30 min
+      return halfHourUnits * 25; // Pack rate
     case 'payg':
-      return Math.ceil(hours * 2) * 25; // 25 MAD per 30 min
+      return halfHourUnits * 30; // Pay-on-use rate
     default:
       return 0;
   }
+}
+
+export function getWalletUnitRate(walletBalance: number): number {
+  if (walletBalance >= 5000) return 18;
+  if (walletBalance >= 3000) return 20;
+  if (walletBalance >= 1500) return 22;
+  return 25;
 }
 
 export function getSubscriptionDetails(tier: SubscriptionTier): { price: number; rides: number; duration_days: number } {
   switch (tier) {
     case 'monthly':
       return { price: 200, rides: 8, duration_days: 30 };
+    case 'trimestrial':
+      return { price: 600, rides: 24, duration_days: 90 };
+    case 'semestrial':
+      return { price: 1200, rides: 48, duration_days: 180 };
     case 'annual':
-      return { price: 1800, rides: 96, duration_days: 365 };
+      return { price: 2400, rides: 96, duration_days: 365 };
     default:
       return { price: 0, rides: 0, duration_days: 0 };
   }

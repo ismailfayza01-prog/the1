@@ -1,7 +1,7 @@
 // Supabase service layer for The 1000 platform
 import { createClient } from './supabase/client';
 import type { User, Business, Rider, Delivery, Transaction, DeliveryOffer } from './types';
-import { getSubscriptionDetails } from './types';
+import { getSubscriptionDetails, type SubscriptionTier } from './types';
 
 function getSupabase() {
   return createClient();
@@ -25,6 +25,20 @@ function isNoRowsError(error: unknown) {
   return e.code === 'PGRST116' || (e.message ?? '').toLowerCase().includes('0 rows');
 }
 
+function normalizeBusinessRow(row: unknown): Business {
+  const business = (row ?? {}) as Business & { location_lat?: number | string | null; location_lng?: number | string | null };
+  const rawLat = business.location_lat;
+  const rawLng = business.location_lng;
+  const lat = typeof rawLat === 'string' ? Number(rawLat) : rawLat;
+  const lng = typeof rawLng === 'string' ? Number(rawLng) : rawLng;
+
+  return {
+    ...business,
+    location_lat: typeof lat === 'number' && Number.isFinite(lat) ? lat : null,
+    location_lng: typeof lng === 'number' && Number.isFinite(lng) ? lng : null,
+  };
+}
+
 // User management
 export const userService = {
   getAll: async (): Promise<User[]> => {
@@ -43,20 +57,18 @@ export const userService = {
   },
 
   login: async (email: string, password: string): Promise<User | null> => {
-    try {
-      const supabase = getSupabase();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return null;
-
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return null;
-
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
-      return (profile as User) || null;
-    } catch (error) {
-      console.error('Login failed', error);
-      return null;
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error('Login failed:', error.message);
+      throw new Error(error.message);
     }
+
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return null;
+
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+    return (profile as User) || null;
   },
 
   getCurrentUser: async (): Promise<User | null> => {
@@ -67,8 +79,7 @@ export const userService = {
 
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
       return (profile as User) || null;
-    } catch (error) {
-      console.error('Get current user failed', error);
+    } catch {
       return null;
     }
   },
@@ -82,17 +93,27 @@ export const userService = {
 export const businessService = {
   getAll: async (): Promise<Business[]> => {
     const { data } = await getSupabase().from('businesses').select('*');
-    return (data as Business[]) || [];
+    return ((data ?? []).map((row: Record<string, unknown>) => normalizeBusinessRow(row))) as Business[];
   },
 
   getById: async (id: string): Promise<Business | undefined> => {
     const { data } = await getSupabase().from('businesses').select('*').eq('id', id).single();
-    return (data as Business) || undefined;
+    return data ? normalizeBusinessRow(data) : undefined;
   },
 
   getByUserId: async (userId: string): Promise<Business | undefined> => {
-    const { data } = await getSupabase().from('businesses').select('*').eq('user_id', userId).single();
-    return (data as Business) || undefined;
+    const supabase = getSupabase();
+    const { data: authData } = await supabase.auth.getUser();
+    const isSelfLookup = !!authData.user && authData.user.id === userId;
+
+    if (isSelfLookup) {
+      const { data, error } = await supabase.rpc('get_my_business');
+      if (!error && data) return normalizeBusinessRow(data);
+      if (error && !isMissingRpcError(error)) throw error;
+    }
+
+    const { data } = await supabase.from('businesses').select('*').eq('user_id', userId).single();
+    return data ? normalizeBusinessRow(data) : undefined;
   },
 
   update: async (id: string, updates: Partial<Business>): Promise<Business | null> => {
@@ -102,7 +123,7 @@ export const businessService = {
       .eq('id', id)
       .select()
       .single();
-    return (data as Business) || null;
+    return data ? normalizeBusinessRow(data) : null;
   },
 
   // Atomic RPC call to use a ride from subscription quota
@@ -153,7 +174,7 @@ export const businessService = {
   },
 
   // Activate or upgrade a subscription
-  subscribe: async (id: string, tier: 'monthly' | 'annual', userId: string): Promise<boolean> => {
+  subscribe: async (id: string, tier: Exclude<SubscriptionTier, 'none'>, userId: string): Promise<boolean> => {
     const details = getSubscriptionDetails(tier);
     const renewal_date = new Date();
     renewal_date.setDate(renewal_date.getDate() + details.duration_days);
@@ -278,13 +299,15 @@ export const riderService = {
 };
 
 // Delivery management
+type DeliveryRow = Delivery & { businesses?: { name: string } | null; riders?: { name: string } | null };
+
 export const deliveryService = {
   getAll: async (): Promise<Delivery[]> => {
     const { data } = await getSupabase()
       .from('deliveries')
       .select('*, businesses(name), riders(name)');
       
-    return (data || []).map((d: any) => ({
+    return (data || []).map((d: DeliveryRow) => ({
       ...d,
       business_name: d.businesses?.name || 'Unknown',
       rider_name: d.riders?.name || null,
@@ -313,7 +336,7 @@ export const deliveryService = {
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
       
-    return (data || []).map((d: any) => ({
+    return (data || []).map((d: DeliveryRow) => ({
       ...d,
       business_name: d.businesses?.name || 'Unknown',
       rider_name: d.riders?.name || null,
@@ -327,7 +350,7 @@ export const deliveryService = {
       .eq('rider_id', riderId)
       .order('created_at', { ascending: false });
       
-    return (data || []).map((d: any) => ({
+    return (data || []).map((d: DeliveryRow) => ({
       ...d,
       business_name: d.businesses?.name || 'Unknown',
       rider_name: d.riders?.name || null,
@@ -340,7 +363,7 @@ export const deliveryService = {
       .select('*, businesses(name), riders(name)')
       .in('status', ['pending', 'offered', 'accepted', 'picked_up', 'in_transit']);
       
-    return (data || []).map((d: any) => ({
+    return (data || []).map((d: DeliveryRow) => ({
       ...d,
       business_name: d.businesses?.name || 'Unknown',
       rider_name: d.riders?.name || null,

@@ -15,8 +15,8 @@ import {
 } from '@/components/maps/layers';
 import type { MapLineFeature, MapPointFeature } from '@/components/maps/types';
 
-const MAP_BOUNDS = { latMin: 35.74, latMax: 35.79, lngMin: -5.86, lngMax: -5.8 };
-const BIZ_LOCATION = { lat: 35.7595, lng: -5.8340 };
+const MAP_BOUNDS = { latMin: 35.65, latMax: 35.83, lngMin: -5.98, lngMax: -5.70 };
+const DEFAULT_BIZ_LOCATION = { lat: 35.7595, lng: -5.8340 };
 
 const RIDERS_SOURCE_ID = 'business-riders-source';
 const RIDERS_LAYER_ID = 'business-riders-layer';
@@ -56,6 +56,7 @@ function getRiderStatusColor(status: Rider['status']): string {
 
 interface BusinessMap3DProps {
   riders: Rider[];
+  businessLocation?: { lat: number; lng: number };
   selectedRiderId: string | null;
   onSelectRider: (id: string | null) => void;
   pinMode?: 'pickup' | 'dropoff' | null;
@@ -68,6 +69,7 @@ interface BusinessMap3DProps {
 
 export function BusinessMap3D({
   riders,
+  businessLocation = DEFAULT_BIZ_LOCATION,
   selectedRiderId,
   onSelectRider,
   pinMode = null,
@@ -77,9 +79,26 @@ export function BusinessMap3D({
   className,
   fallback = null,
 }: BusinessMap3DProps) {
+  const mapCenter = businessLocation ?? DEFAULT_BIZ_LOCATION;
   const mapRef = useRef<MapLibreMap | null>(null);
-  const didFitBoundsRef = useRef(false);
+  const previousSelectedRiderRef = useRef<string | null>(null);
+  const lastCenteredBusinessRef = useRef<{ lat: number; lng: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+
+    const previous = lastCenteredBusinessRef.current;
+    const sameCenter = !!previous && previous.lat === mapCenter.lat && previous.lng === mapCenter.lng;
+    if (sameCenter) return;
+
+    mapRef.current.easeTo({
+      center: [mapCenter.lng, mapCenter.lat],
+      zoom: 13,
+      duration: 500,
+    });
+    lastCenteredBusinessRef.current = { lat: mapCenter.lat, lng: mapCenter.lng };
+  }, [mapCenter.lat, mapCenter.lng, mapReady]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -107,8 +126,8 @@ export function BusinessMap3D({
     const staticPoints: MapPointFeature[] = [
       {
         id: 'business-origin',
-        lat: BIZ_LOCATION.lat,
-        lng: BIZ_LOCATION.lng,
+        lat: mapCenter.lat,
+        lng: mapCenter.lng,
         label: 'Business',
         color: '#0ea5e9',
         radius: 7,
@@ -145,7 +164,7 @@ export function BusinessMap3D({
     const routeLines: MapLineFeature[] = selectedRider
       ? [{
           id: `route-${selectedRider.id}`,
-          points: [BIZ_LOCATION, getRiderLocation(selectedRider)],
+          points: [mapCenter, getRiderLocation(selectedRider)],
           color: '#10b981',
           width: 4,
           opacity: 0.95,
@@ -165,18 +184,20 @@ export function BusinessMap3D({
     upsertLineLayers(map, ROUTE_SOURCE_ID, ROUTE_LAYER_ID, ROUTE_GLOW_LAYER_ID);
 
     if (selectedRider) {
-      fitMapToPoints(map, [BIZ_LOCATION, getRiderLocation(selectedRider)], 15);
+      fitMapToPoints(map, [mapCenter, getRiderLocation(selectedRider)], 15);
+      previousSelectedRiderRef.current = selectedRider.id;
       return;
     }
 
-    if (!didFitBoundsRef.current) {
-      const allPoints = [BIZ_LOCATION, ...riderPoints.map((point) => ({ lat: point.lat, lng: point.lng }))];
-      fitMapToPoints(map, allPoints, 14);
-      if (allPoints.length > 0) {
-        didFitBoundsRef.current = true;
-      }
+    if (previousSelectedRiderRef.current) {
+      map.easeTo({
+        center: [mapCenter.lng, mapCenter.lat],
+        zoom: 13,
+        duration: 400,
+      });
+      previousSelectedRiderRef.current = null;
     }
-  }, [dropoffPin, mapReady, pickupPin, riders, selectedRiderId]);
+  }, [dropoffPin, mapCenter, mapReady, pickupPin, riders, selectedRiderId]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -230,7 +251,7 @@ export function BusinessMap3D({
   return (
     <Map3DBase
       className={className}
-      center={{ lat: BIZ_LOCATION.lat, lng: BIZ_LOCATION.lng }}
+      center={{ lat: mapCenter.lat, lng: mapCenter.lng }}
       zoom={13}
       pitch={45}
       bearing={12}
