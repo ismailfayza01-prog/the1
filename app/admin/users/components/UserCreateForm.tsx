@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ManagedUserRole, ProvisionMode } from '../types';
+import { BusinessLocationPicker, type BusinessLocationValue } from './BusinessLocationPicker';
 
 interface UserCreateFormProps {
   onCreated: () => void;
@@ -26,6 +27,7 @@ export function UserCreateForm({ onCreated }: UserCreateFormProps) {
   const [phone, setPhone] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [address, setAddress] = useState('');
+  const [businessLocation, setBusinessLocation] = useState<BusinessLocationValue | null>(null);
   const [riderName, setRiderName] = useState('');
   const [cin, setCin] = useState('');
   const [vehicleType, setVehicleType] = useState('');
@@ -46,6 +48,10 @@ export function UserCreateForm({ onCreated }: UserCreateFormProps) {
     setSuccess(null);
 
     try {
+      if (role === 'business' && !businessLocation) {
+        throw new Error('Business location pin is required. Click on the map to pin location.');
+      }
+
       const response = await fetch('/api/admin/users/create', {
         method: 'POST',
         headers: {
@@ -60,6 +66,8 @@ export function UserCreateForm({ onCreated }: UserCreateFormProps) {
           phone: phone || undefined,
           business_name: role === 'business' ? businessName || undefined : undefined,
           address: role === 'business' ? address || undefined : undefined,
+          location_lat: role === 'business' ? businessLocation?.lat ?? undefined : undefined,
+          location_lng: role === 'business' ? businessLocation?.lng ?? undefined : undefined,
           rider_name: role === 'rider' ? riderName || undefined : undefined,
           cin: role === 'rider' ? cin || undefined : undefined,
           vehicle_type: role === 'rider' ? vehicleType || undefined : undefined,
@@ -81,6 +89,7 @@ export function UserCreateForm({ onCreated }: UserCreateFormProps) {
       setPhone('');
       setBusinessName('');
       setAddress('');
+      setBusinessLocation(null);
       setRiderName('');
       setCin('');
       setVehicleType('');
@@ -210,9 +219,19 @@ export function UserCreateForm({ onCreated }: UserCreateFormProps) {
                     id="create-business-address"
                     value={address}
                     onChange={(event) => setAddress(event.target.value)}
-                    placeholder="Optional address"
+                    placeholder="Business address"
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Business location pin (required)</Label>
+                <BusinessLocationPicker value={businessLocation} onChange={setBusinessLocation} />
+                <p className="text-xs text-sky-700">
+                  Click on the map to pin the business location.
+                  {businessLocation
+                    ? ` Selected: ${businessLocation.lat.toFixed(6)}, ${businessLocation.lng.toFixed(6)}`
+                    : ' No location pinned yet.'}
+                </p>
               </div>
             </div>
           )}
@@ -263,7 +282,11 @@ export function UserCreateForm({ onCreated }: UserCreateFormProps) {
             </div>
           )}
 
-          <Button type="submit" disabled={submitting} className="w-full md:w-auto">
+          <Button
+            type="submit"
+            disabled={submitting || (role === 'business' && !businessLocation)}
+            className="w-full md:w-auto"
+          >
             {submitting ? 'Creating user...' : 'Create user'}
           </Button>
         </form>

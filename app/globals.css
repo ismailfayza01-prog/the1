@@ -327,3 +327,69 @@ h1, h2, h3, h4, h5, h6,
     transform: perspective(120px) rotateY(-24deg) skewY(-3deg);
   }
 }
+
+/* ── Landing page redesign utilities ── */
+
+/* Wave SVG section divider */
+.section-wave {
+  position: relative;
+}
+.section-wave::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 48px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 48' preserveAspectRatio='none'%3E%3Cpath fill='%23f0fdf4' d='M0,32L60,26.7C120,21,240,11,360,10.7C480,11,600,21,720,26.7C840,32,960,32,1080,26.7C1200,21,1320,11,1380,5.3L1440,0V48H0Z'/%3E%3C/svg%3E");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+/* Pulse ring animation for feature icons */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.3);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+.pulse-ring {
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+/* Step number for How It Works */
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(168 82% 38%));
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* Sticky nav scrolled state */
+.nav-scrolled {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Accent line for cards */
+.accent-line {
+  border-left: 4px solid hsl(var(--primary));
+}
+
+/* Dot pattern overlay for login pages */
+.dot-pattern {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}

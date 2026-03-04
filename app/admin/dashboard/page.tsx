@@ -12,6 +12,7 @@ import { userService, riderService, businessService, deliveryService } from '@/l
 import { createClient } from '@/lib/supabase/client';
 import { MAP_3D_ENABLED } from '@/components/maps/config';
 import { AdminMap3D } from '@/components/maps/AdminMap3D';
+import { BusinessLocationPicker, type BusinessLocationValue } from '../users/components/BusinessLocationPicker';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin,
@@ -20,7 +21,6 @@ import {
   DollarSign,
   LogOut,
   TrendingUp,
-  CheckCircle2,
   Home,
   BarChart3,
 } from 'lucide-react';
@@ -130,6 +130,14 @@ function getRouteColor(status: Delivery['status']): string {
     expired: '#64748b',
   };
   return byStatus[status] || '#94a3b8';
+}
+
+function isValidLatitude(value: number): boolean {
+  return Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value: number): boolean {
+  return Number.isFinite(value) && value >= -180 && value <= 180;
 }
 
 interface AdminLiveMapProps {
@@ -274,6 +282,10 @@ export default function AdminDashboardPage() {
   const [walletPaymentMethod, setWalletPaymentMethod] = useState<'cash' | 'card' | 'check'>('cash');
   const [walletNote, setWalletNote] = useState('');
   const [walletSubmitting, setWalletSubmitting] = useState(false);
+  const [locationDraft, setLocationDraft] = useState<{ lat: string; lng: string }>({ lat: '', lng: '' });
+  const [locationSubmitting, setLocationSubmitting] = useState(false);
+  const [isLocationDraftDirty, setIsLocationDraftDirty] = useState(false);
+  const locationDraftBusinessIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -318,6 +330,32 @@ export default function AdminDashboardPage() {
       setWalletBusinessId(businesses[0].id);
     }
   }, [businesses, walletBusinessId]);
+
+  useEffect(() => {
+    const business = businesses.find((item) => item.id === walletBusinessId);
+    if (!business) {
+      setLocationDraft((prev) => (prev.lat === '' && prev.lng === '' ? prev : { lat: '', lng: '' }));
+      setIsLocationDraftDirty(false);
+      locationDraftBusinessIdRef.current = null;
+      return;
+    }
+
+    const selectedBusinessChanged = locationDraftBusinessIdRef.current !== business.id;
+    if (!selectedBusinessChanged && isLocationDraftDirty) return;
+
+    const lat = typeof business.location_lat === 'number' && Number.isFinite(business.location_lat)
+      ? business.location_lat.toFixed(6)
+      : '';
+    const lng = typeof business.location_lng === 'number' && Number.isFinite(business.location_lng)
+      ? business.location_lng.toFixed(6)
+      : '';
+
+    setLocationDraft((prev) => (prev.lat === lat && prev.lng === lng ? prev : { lat, lng }));
+    if (selectedBusinessChanged) {
+      setIsLocationDraftDirty(false);
+    }
+    locationDraftBusinessIdRef.current = business.id;
+  }, [walletBusinessId, businesses, isLocationDraftDirty]);
 
   const handleLogout = async () => {
     await userService.logout();
@@ -404,6 +442,50 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleAdminLocationUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const target = businesses.find((b) => b.id === walletBusinessId);
+    if (!target) {
+      setActionMsg('Select a business first');
+      return;
+    }
+
+    const lat = Number(locationDraft.lat);
+    const lng = Number(locationDraft.lng);
+    if (!isValidLatitude(lat) || !isValidLongitude(lng)) {
+      setActionMsg('Enter valid latitude and longitude');
+      return;
+    }
+
+    setLocationSubmitting(true);
+    try {
+      const nextLat = Number(lat.toFixed(6));
+      const nextLng = Number(lng.toFixed(6));
+
+      const updated = await businessService.update(target.id, {
+        location_lat: nextLat,
+        location_lng: nextLng,
+        location_pinned_at: new Date().toISOString(),
+      });
+      if (!updated) {
+        setActionMsg('Failed to update business location');
+        return;
+      }
+
+      await loadData();
+      setLocationDraft({ lat: nextLat.toFixed(6), lng: nextLng.toFixed(6) });
+      setIsLocationDraftDirty(false);
+      setActionMsg(`Location updated for ${target.name}`);
+      setTimeout(() => setActionMsg(''), 4000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update business location';
+      setActionMsg(message);
+    } finally {
+      setLocationSubmitting(false);
+    }
+  };
+
   if (!currentUser) return null;
 
   const availableRiders = riders.filter(r => r.status === 'available').length;
@@ -416,10 +498,28 @@ export default function AdminDashboardPage() {
   }).length;
 
   const totalRevenue = businesses.reduce((sum, b) => {
-    const tierRevenue = b.subscription_tier === 'monthly' ? 200 : b.subscription_tier === 'annual' ? 1800 : 0;
+    const tierRevenue =
+      b.subscription_tier === 'monthly'
+        ? 200
+        : b.subscription_tier === 'trimestrial'
+          ? 600
+          : b.subscription_tier === 'semestrial'
+            ? 1200
+            : b.subscription_tier === 'annual'
+              ? 2400
+              : 0;
     return sum + tierRevenue + b.wallet_balance;
   }, 0);
   const selectedWalletBusiness = businesses.find((business) => business.id === walletBusinessId) || null;
+  const parsedLocationDraftLat = Number(locationDraft.lat);
+  const parsedLocationDraftLng = Number(locationDraft.lng);
+  const isLocationDraftValid = isValidLatitude(parsedLocationDraftLat) && isValidLongitude(parsedLocationDraftLng);
+  const mapDraftValue: BusinessLocationValue | null = isLocationDraftValid
+    ? {
+      lat: Number(parsedLocationDraftLat.toFixed(6)),
+      lng: Number(parsedLocationDraftLng.toFixed(6)),
+    }
+    : null;
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, string> = {
@@ -730,6 +830,100 @@ export default function AdminDashboardPage() {
                   </form>
                 </div>
 
+                <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                  <div className="text-sm font-bold text-violet-800">Business Location Update</div>
+                  <p className="mt-1 text-xs text-violet-700">
+                    Admin can re-pin a business location when the customer requests a correction.
+                  </p>
+
+                  <form onSubmit={handleAdminLocationUpdate} className="mt-4 space-y-3">
+                    <div className="rounded-md border border-violet-200 bg-white px-3 py-2 text-xs text-violet-700">
+                      {selectedWalletBusiness ? (
+                        <>
+                          Selected: <span className="font-semibold">{selectedWalletBusiness.name}</span>
+                          {typeof selectedWalletBusiness.location_lat === 'number' && typeof selectedWalletBusiness.location_lng === 'number' ? (
+                            <span>
+                              {' '}- Current pin: {selectedWalletBusiness.location_lat.toFixed(6)}, {selectedWalletBusiness.location_lng.toFixed(6)}
+                            </span>
+                          ) : (
+                            <span> - No location pinned yet</span>
+                          )}
+                        </>
+                      ) : (
+                        <span>Select a business to edit location</span>
+                      )}
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="business-location-lat" className="text-xs text-violet-800">Latitude</Label>
+                        <Input
+                          id="business-location-lat"
+                          type="number"
+                          step="0.000001"
+                          min="-90"
+                          max="90"
+                          value={locationDraft.lat}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setIsLocationDraftDirty(true);
+                            setLocationDraft((prev) => (
+                              prev.lat === nextValue ? prev : { ...prev, lat: nextValue }
+                            ));
+                          }}
+                          disabled={!selectedWalletBusiness || locationSubmitting}
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label htmlFor="business-location-lng" className="text-xs text-violet-800">Longitude</Label>
+                        <Input
+                          id="business-location-lng"
+                          type="number"
+                          step="0.000001"
+                          min="-180"
+                          max="180"
+                          value={locationDraft.lng}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setIsLocationDraftDirty(true);
+                            setLocationDraft((prev) => (
+                              prev.lng === nextValue ? prev : { ...prev, lng: nextValue }
+                            ));
+                          }}
+                          disabled={!selectedWalletBusiness || locationSubmitting}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <BusinessLocationPicker
+                      value={mapDraftValue}
+                      onChange={(coords) => {
+                        setIsLocationDraftDirty(true);
+                        setLocationDraft({
+                          lat: coords.lat.toFixed(6),
+                          lng: coords.lng.toFixed(6),
+                        });
+                      }}
+                    />
+
+                    <p className="text-[11px] text-violet-700">
+                      Click on the map to place the business pin exactly on the requested location.
+                    </p>
+
+                    <div className="flex justify-end">
+                      <Button
+                        type="submit"
+                        disabled={!selectedWalletBusiness || !isLocationDraftValid || locationSubmitting}
+                      >
+                        {locationSubmitting ? 'Saving location...' : 'Save Location'}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+
                 <div className="space-y-3">
                   {businesses.map((business) => (
                     <div
@@ -894,3 +1088,4 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+

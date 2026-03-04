@@ -38,6 +38,12 @@ async function main() {
     process.exit(0);
   }
 
+  // Under strict RLS, blocked updates can return success with zero matched rows.
+  if (Array.isArray(data) && data.length === 0) {
+    console.log('WALLET GUARD BLOCKED (expected): no rows updated (RLS/policy)');
+    process.exit(0);
+  }
+
   console.error('UNEXPECTED SUCCESS:', data);
   process.exit(1);
 }

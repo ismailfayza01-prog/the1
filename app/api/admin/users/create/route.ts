@@ -15,6 +15,8 @@ interface CreateUserRequestBody {
   phone?: string;
   business_name?: string;
   address?: string;
+  location_lat?: number;
+  location_lng?: number;
   rider_name?: string;
   cin?: string;
   vehicle_type?: string;
@@ -28,6 +30,14 @@ function normalizeEmail(value: string) {
 
 function isStrongEnoughTempPassword(password: string) {
   return password.length >= 8;
+}
+
+function isValidLatitude(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= -180 && value <= 180;
 }
 
 export async function POST(request: NextRequest) {
@@ -59,6 +69,14 @@ export async function POST(request: NextRequest) {
       { error: 'Temp password is required and must be at least 8 characters' },
       { status: 400 }
     );
+  }
+  if (role === 'business') {
+    if (!isValidLatitude(body.location_lat) || !isValidLongitude(body.location_lng)) {
+      return NextResponse.json(
+        { error: 'Business location pin is required (valid location_lat and location_lng).' },
+        { status: 400 }
+      );
+    }
   }
 
   const existingUsers = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
@@ -114,6 +132,8 @@ export async function POST(request: NextRequest) {
       ? {
           business_name: body.business_name ?? null,
           address: body.address ?? null,
+          location_lat: body.location_lat ?? null,
+          location_lng: body.location_lng ?? null,
         }
       : null;
 

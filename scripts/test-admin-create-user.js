@@ -76,6 +76,8 @@ async function main() {
     phone: '+212600000000',
     business_name: role === 'business' ? 'Test Business' : undefined,
     address: role === 'business' ? 'Tangier' : undefined,
+    location_lat: role === 'business' ? 35.7595 : undefined,
+    location_lng: role === 'business' ? -5.834 : undefined,
     rider_name: role === 'rider' ? 'Test Rider' : undefined,
     cin: role === 'rider' ? 'TESTCIN123' : undefined,
     vehicle_type: role === 'rider' ? 'Scooter' : undefined,

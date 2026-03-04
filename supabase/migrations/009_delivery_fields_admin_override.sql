@@ -15,12 +15,14 @@ alter table public.deliveries
   alter column dropoff_lng drop not null;
 
 -- Admin can update deliveries and riders
-create policy if not exists "Admins can update all deliveries"
+drop policy if exists "Admins can update all deliveries" on public.deliveries;
+create policy "Admins can update all deliveries"
   on public.deliveries for update
   using (public.get_user_role() = 'admin')
   with check (public.get_user_role() = 'admin');
 
-create policy if not exists "Admins can update all riders"
+drop policy if exists "Admins can update all riders" on public.riders;
+create policy "Admins can update all riders"
   on public.riders for update
   using (public.get_user_role() = 'admin')
   with check (public.get_user_role() = 'admin');

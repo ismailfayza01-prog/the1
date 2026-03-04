@@ -357,6 +357,8 @@ create trigger validate_delivery_status_transition
   for each row execute procedure public.validate_delivery_status_transition();
 
 -- 10) Business dispatch (minimal deterministic assignment)
+drop function if exists public.dispatch_delivery(uuid);
+drop function if exists public.dispatch_delivery(uuid, uuid);
 create or replace function public.dispatch_delivery(
   p_delivery_id uuid,
   p_preferred_rider_user_id uuid default null
