@@ -72,6 +72,11 @@ function formatCommissionMad(value: number): string {
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
 }
 
+function normalizeRiderCommission(value: number | null | undefined): number {
+  const safe = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  return Math.max(RIDER_COMMISSION_BASE, safe);
+}
+
 function getNavigationStage(status: Delivery['status']): NavigationStage {
   if (status === 'picked_up' || status === 'in_transit') return 'dropoff';
   return 'pickup';
@@ -1123,7 +1128,7 @@ export default function RiderDashboardPage() {
 
       await riderService.update(rider.id, {
         total_deliveries: rider.total_deliveries + 1,
-        earnings_this_month: rider.earnings_this_month + delivery.rider_commission,
+        earnings_this_month: rider.earnings_this_month + normalizeRiderCommission(delivery.rider_commission),
         status: 'available',
         last_seen_at: new Date().toISOString(),
       });
@@ -1590,7 +1595,7 @@ export default function RiderDashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-white border border-emerald-100 p-3 text-center">
                   <p className="text-xs text-muted-foreground">You earn</p>
-                  <p className="text-xl font-extrabold text-emerald-600">{activeDelivery.rider_commission} MAD</p>
+                  <p className="text-xl font-extrabold text-emerald-600">{formatCommissionMad(normalizeRiderCommission(activeDelivery.rider_commission))} MAD</p>
                 </div>
                 <div className="rounded-xl bg-white border border-emerald-100 p-3 text-center">
                   <p className="text-xs text-muted-foreground">Est. time</p>
@@ -1824,7 +1829,7 @@ export default function RiderDashboardPage() {
                         <p className="text-xs text-muted-foreground">{delivery.business_name} · {delivery.dropoff_address.slice(0, 30)}…</p>
                       </div>
                     </div>
-                    <p className="text-sm font-extrabold text-emerald-600">+{delivery.rider_commission} MAD</p>
+                    <p className="text-sm font-extrabold text-emerald-600">+{formatCommissionMad(normalizeRiderCommission(delivery.rider_commission))} MAD</p>
                   </div>
                 </CardContent>
               </Card>
