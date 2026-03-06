@@ -50,6 +50,8 @@ function getPackTierLabel(tier: SubscriptionTier): string {
   return PACK_TIER_META[tier].label;
 }
 
+const RIDER_STALE_AFTER_MS = 2 * 60 * 1000; // 2 minutes
+
 function seedLocation(id: string): { lat: number; lng: number } {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
@@ -86,6 +88,12 @@ function getBusinessMapCenter(business: Business | null | undefined): { lat: num
   return DEFAULT_BIZ_LOCATION;
 }
 
+function hasRealLocation(rider: Rider): boolean {
+  if (typeof rider.last_lat === 'number' && typeof rider.last_lng === 'number') return true;
+  const fromJson = rider.current_location as { lat: number; lng: number } | null;
+  return !!fromJson?.lat && !!fromJson?.lng;
+}
+
 function getRiderLocation(rider: Rider): { lat: number; lng: number } {
   if (typeof rider.last_lat === 'number' && typeof rider.last_lng === 'number') {
     return { lat: rider.last_lat, lng: rider.last_lng };
@@ -101,9 +109,9 @@ function getRiderStatusColor(status: Rider['status']): string {
   return '#94a3b8';
 }
 
-function getRiderMotoIcon(L: any, status: Rider['status'], isSelected = false): any {
+function getRiderMotoIcon(L: any, status: Rider['status'], isSelected = false, isStale = false): any {
   const size = isSelected ? 44 : 38;
-  const statusColor = getRiderStatusColor(status);
+  const statusColor = isStale ? '#94a3b8' : getRiderStatusColor(status);
   const statusClass = status === 'available'
     ? 'map-rider-status--online'
     : status === 'busy'
@@ -114,7 +122,7 @@ function getRiderMotoIcon(L: any, status: Rider['status'], isSelected = false): 
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     html: `
-      <div class="map-rider-marker" style="width:${size}px;height:${size}px;">
+      <div class="map-rider-marker" style="width:${size}px;height:${size}px;${isStale ? 'opacity:0.45;' : ''}">
         <div class="map-rider-core" style="width:${size}px;height:${size}px;">
           <svg class="map-rider-bike" viewBox="0 0 24 24" width="${isSelected ? 22 : 20}" height="${isSelected ? 22 : 20}" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="6" cy="17" r="3"></circle>
@@ -329,13 +337,20 @@ function BusinessMap({
     for (const rider of riders) {
       const loc = getRiderLocation(rider);
       const isSelected = rider.id === selectedRiderId;
+      const isStale = rider.last_seen_at
+        ? Date.now() - new Date(rider.last_seen_at).getTime() > RIDER_STALE_AFTER_MS
+        : true;
       const marker = L.marker([loc.lat, loc.lng], {
-        icon: getRiderMotoIcon(L, rider.status, isSelected),
+        icon: getRiderMotoIcon(L, rider.status, isSelected, isStale),
       });
+
+      const tooltipText = isStale
+        ? `${rider.name} · ${rider.status} · location stale`
+        : `${rider.name} · ${rider.status}`;
 
       marker
         .addTo(layer)
-        .bindTooltip(`${rider.name} · ${rider.status}`, { direction: 'top', offset: [0, -8] })
+        .bindTooltip(tooltipText, { direction: 'top', offset: [0, -8] })
         .on('click', () => {
           if (rider.status !== 'available') return;
           onSelectRider(isSelected ? null : rider.id);
@@ -513,8 +528,10 @@ export default function BusinessDashboardPage() {
   useEffect(() => {
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let riderChannel: ReturnType<typeof supabase.channel> | null = null;
     let pollInterval: ReturnType<typeof setInterval> | null = null;
     let realtimeDebounce: ReturnType<typeof setTimeout> | null = null;
+    let riderDebounce: ReturnType<typeof setTimeout> | null = null;
     let userIdRef: string | null = null;
 
     const debouncedLoad = () => {
@@ -530,10 +547,16 @@ export default function BusinessDashboardPage() {
       userIdRef = user.id;
       setCurrentUser(user);
       await loadData(user.id);
-      channel = supabase.channel('business-dashboard')
+      channel = supabase.channel('business-data')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, debouncedLoad)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, debouncedLoad)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, debouncedLoad)
+        .subscribe();
+
+      riderChannel = supabase.channel('business-riders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, () => {
+          if (riderDebounce) clearTimeout(riderDebounce);
+          riderDebounce = setTimeout(() => void loadRiders(), 500);
+        })
         .subscribe();
     }
     init();
@@ -545,8 +568,10 @@ export default function BusinessDashboardPage() {
 
     return () => {
       if (channel) supabase.removeChannel(channel);
+      if (riderChannel) supabase.removeChannel(riderChannel);
       if (pollInterval) clearInterval(pollInterval);
       if (realtimeDebounce) clearTimeout(realtimeDebounce);
+      if (riderDebounce) clearTimeout(riderDebounce);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
@@ -673,6 +698,10 @@ export default function BusinessDashboardPage() {
       setBusiness(biz);
       setDeliveries(await deliveryService.getByBusinessId(biz.id));
     }
+    return loadRiders();
+  };
+
+  const loadRiders = async () => {
     // Single fetch — derive available from allRiders to cut DB calls in half
     const all = await riderService.getAll();
     setAllRiders(all);
@@ -686,11 +715,13 @@ export default function BusinessDashboardPage() {
   );
   const businessMapKey = `${business?.id ?? 'unknown'}:${businessLocation.lat.toFixed(6)}:${businessLocation.lng.toFixed(6)}`;
   const ridersForMap = useMemo(() => {
-    return [...allRiders].sort((a, b) => {
-      const distA = haversineMeters(getRiderLocation(a), businessLocation);
-      const distB = haversineMeters(getRiderLocation(b), businessLocation);
-      return distA - distB;
-    });
+    return [...allRiders]
+      .filter(hasRealLocation)          // ← only real GPS
+      .sort((a, b) => {
+        const distA = haversineMeters(getRiderLocation(a), businessLocation);
+        const distB = haversineMeters(getRiderLocation(b), businessLocation);
+        return distA - distB;
+      });
   }, [allRiders, businessLocation]);
   const selectedRider = ridersForMap.find(r => r.id === selectedRiderId) ?? null;
 
@@ -922,176 +953,176 @@ export default function BusinessDashboardPage() {
 
   return (
     <>
-    <div className="min-h-screen bg-background">
-      {/* Sticky Header */}
-      <header className="sticky top-0 z-50 border-b border-border bg-white/90 backdrop-blur-lg flex items-center justify-between px-6 h-15">
-        <div className="flex items-center gap-3">
-          <Link href="/">
-            <button className="bg-transparent border-none cursor-pointer text-sky-400 hover:text-sky-300 transition-colors">
-              <Home size={18} />
-            </button>
-          </Link>
-          <div className="w-px h-5 bg-white/10" />
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-cyan-500 flex items-center justify-center">
-              <MapPin size={14} className="text-white" />
-            </div>
-            <div>
-              <div className="font-display font-bold text-sm text-foreground">{business.name}</div>
-              <div className="text-xs text-sky-500">Business Portal</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {successMsg && (
-            <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 animate-pulse">
-              ✓ {successMsg}
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            className="bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg p-1.5 cursor-pointer text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] h-[calc(100vh-60px)] overflow-hidden">
-
-        {/* LEFT: Map Section */}
-        <div className="relative p-3 sm:p-5 lg:p-6 flex flex-col gap-3 lg:gap-4 overflow-hidden">
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-3 gap-3 lg:gap-4 flex-shrink-0">
-            {[
-              { label: 'Pack', value: getPackTierLabel(business.subscription_tier), icon: <CreditCard size={14} />, color: 'text-sky-500' },
-              { label: 'Courses', value: `${ridesRemaining}/${business.rides_total}`, icon: <Package size={14} />, color: 'text-violet-500' },
-              { label: 'Wallet', value: `${business.wallet_balance} MAD`, icon: <Wallet size={14} />, color: 'text-emerald-500' },
-            ].map(s => (
-              <div key={s.label} className="bg-white border border-border shadow-sm rounded-xl p-3 lg:p-4 flex items-center gap-3">
-                <div className={s.color}>{s.icon}</div>
-                <div className="min-w-0">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider">
-                    <span className="hidden sm:inline">{s.label}</span>
-                  </div>
-                  <div className="font-display font-bold text-sm lg:text-base text-foreground truncate">
-                    {s.value}
-                  </div>
-                </div>
+      <div className="min-h-screen bg-background">
+        {/* Sticky Header */}
+        <header className="sticky top-0 z-50 border-b border-border bg-white/90 backdrop-blur-lg flex items-center justify-between px-6 h-15">
+          <div className="flex items-center gap-3">
+            <Link href="/">
+              <button className="bg-transparent border-none cursor-pointer text-sky-400 hover:text-sky-300 transition-colors">
+                <Home size={18} />
+              </button>
+            </Link>
+            <div className="w-px h-5 bg-white/10" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-cyan-500 flex items-center justify-center">
+                <MapPin size={14} className="text-white" />
               </div>
-            ))}
-          </div>
-
-          {/* Map Legend */}
-          <div className="flex gap-3 items-center flex-shrink-0 overflow-x-auto">
-            <div className="text-xs text-muted-foreground font-semibold whitespace-nowrap">CARTE EN DIRECT</div>
-            <div className="flex gap-2">
-              {[
-                { color: 'bg-sky-400', label: 'Votre adresse' },
-                { color: 'bg-emerald-500', label: `${ridersForMap.length} rider${ridersForMap.length !== 1 ? 's' : ''} visible` },
-              ].map(l => (
-                <div key={l.label} className="flex items-center gap-2 bg-white border border-border rounded-full px-3 py-1 text-xs text-foreground whitespace-nowrap">
-                  <div className={`w-1.5 h-1.5 rounded-full ${l.color}`} />
-                  {l.label}
-                </div>
-              ))}
-              {selectedRider && (
-                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs text-emerald-700 whitespace-nowrap">
-                  <Bike size={10} /> {selectedRider.name}
-                </div>
-              )}
+              <div>
+                <div className="font-display font-bold text-sm text-foreground">{business.name}</div>
+                <div className="text-xs text-sky-500">Business Portal</div>
+              </div>
             </div>
           </div>
 
-          {/* Canvas Map */}
-          <div className="flex-1 bg-gray-50 border border-border rounded-2xl overflow-hidden min-h-0">
-            {MAP_3D_ENABLED ? (
-              <BusinessMap3D
-                key={`3d-${businessMapKey}`}
-                riders={ridersForMap}
-                businessLocation={businessLocation}
-                selectedRiderId={selectedRiderId}
-                onSelectRider={setSelectedRiderId}
-                pinMode={sidebarTab === 'create' ? pinMode : null}
-                pickupPin={pickupCoords}
-                dropoffPin={dropoffCoords}
-                onMapPin={handleMapPin}
-                onRoutePreview={setRoutePreview}
-                className="w-full h-full rounded-2xl"
-                fallback={(
-                  <BusinessMap
-                    key={`2d-fallback-${businessMapKey}`}
-                    riders={ridersForMap}
-                    businessLocation={businessLocation}
-                    selectedRiderId={selectedRiderId}
-                    onSelectRider={setSelectedRiderId}
-                    pinMode={sidebarTab === 'create' ? pinMode : null}
-                    pickupPin={pickupCoords}
-                    dropoffPin={dropoffCoords}
-                    onMapPin={handleMapPin}
-                  />
-                )}
-              />
-            ) : (
-              <BusinessMap
-                key={`2d-${businessMapKey}`}
-                riders={ridersForMap}
-                businessLocation={businessLocation}
-                selectedRiderId={selectedRiderId}
-                onSelectRider={setSelectedRiderId}
-                pinMode={sidebarTab === 'create' ? pinMode : null}
-                pickupPin={pickupCoords}
-                dropoffPin={dropoffCoords}
-                onMapPin={handleMapPin}
-              />
+          <div className="flex items-center gap-3">
+            {successMsg && (
+              <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 animate-pulse">
+                ✓ {successMsg}
+              </div>
             )}
+            <button
+              onClick={handleLogout}
+              className="bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg p-1.5 cursor-pointer text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
+        </header>
 
-          {/* Active Deliveries Strip */}
-          {activeDeliveries.length > 0 && (
-            <div className="flex-shrink-0 bg-white border border-border shadow-sm rounded-xl p-4">
-              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3">
-                Livraisons actives ({activeDeliveries.length})
-              </div>
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {activeDeliveries.map(d => (
-                  <div key={d.id} className={`${statusColor[d.status]} border rounded-lg px-3 py-2 text-xs flex-shrink-0`}>
-                    <div className="font-semibold">{d.status}</div>
-                    <div className="text-[11px] opacity-80">
-                      {new Date(d.picked_up_at || d.accepted_at || d.created_at).toLocaleTimeString()}
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] h-[calc(100vh-60px)] overflow-hidden">
+
+          {/* LEFT: Map Section */}
+          <div className="relative p-3 sm:p-5 lg:p-6 flex flex-col gap-3 lg:gap-4 overflow-hidden">
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-3 gap-3 lg:gap-4 flex-shrink-0">
+              {[
+                { label: 'Pack', value: getPackTierLabel(business.subscription_tier), icon: <CreditCard size={14} />, color: 'text-sky-500' },
+                { label: 'Courses', value: `${ridesRemaining}/${business.rides_total}`, icon: <Package size={14} />, color: 'text-violet-500' },
+                { label: 'Wallet', value: `${business.wallet_balance} MAD`, icon: <Wallet size={14} />, color: 'text-emerald-500' },
+              ].map(s => (
+                <div key={s.label} className="bg-white border border-border shadow-sm rounded-xl p-3 lg:p-4 flex items-center gap-3">
+                  <div className={s.color}>{s.icon}</div>
+                  <div className="min-w-0">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                      <span className="hidden sm:inline">{s.label}</span>
+                    </div>
+                    <div className="font-display font-bold text-sm lg:text-base text-foreground truncate">
+                      {s.value}
                     </div>
                   </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Map Legend */}
+            <div className="flex gap-3 items-center flex-shrink-0 overflow-x-auto">
+              <div className="text-xs text-muted-foreground font-semibold whitespace-nowrap">CARTE EN DIRECT</div>
+              <div className="flex gap-2">
+                {[
+                  { color: 'bg-sky-400', label: 'Votre adresse' },
+                  { color: 'bg-emerald-500', label: `${ridersForMap.length} rider${ridersForMap.length !== 1 ? 's' : ''} on map` },
+                ].map(l => (
+                  <div key={l.label} className="flex items-center gap-2 bg-white border border-border rounded-full px-3 py-1 text-xs text-foreground whitespace-nowrap">
+                    <div className={`w-1.5 h-1.5 rounded-full ${l.color}`} />
+                    {l.label}
+                  </div>
                 ))}
+                {selectedRider && (
+                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-xs text-emerald-700 whitespace-nowrap">
+                    <Bike size={10} /> {selectedRider.name}
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Canvas Map */}
+            <div className="flex-1 bg-gray-50 border border-border rounded-2xl overflow-hidden min-h-0">
+              {MAP_3D_ENABLED ? (
+                <BusinessMap3D
+                  key={`3d-${businessMapKey}`}
+                  riders={ridersForMap}
+                  businessLocation={businessLocation}
+                  selectedRiderId={selectedRiderId}
+                  onSelectRider={setSelectedRiderId}
+                  pinMode={sidebarTab === 'create' ? pinMode : null}
+                  pickupPin={pickupCoords}
+                  dropoffPin={dropoffCoords}
+                  onMapPin={handleMapPin}
+                  onRoutePreview={setRoutePreview}
+                  className="w-full h-full rounded-2xl"
+                  fallback={(
+                    <BusinessMap
+                      key={`2d-fallback-${businessMapKey}`}
+                      riders={ridersForMap}
+                      businessLocation={businessLocation}
+                      selectedRiderId={selectedRiderId}
+                      onSelectRider={setSelectedRiderId}
+                      pinMode={sidebarTab === 'create' ? pinMode : null}
+                      pickupPin={pickupCoords}
+                      dropoffPin={dropoffCoords}
+                      onMapPin={handleMapPin}
+                    />
+                  )}
+                />
+              ) : (
+                <BusinessMap
+                  key={`2d-${businessMapKey}`}
+                  riders={ridersForMap}
+                  businessLocation={businessLocation}
+                  selectedRiderId={selectedRiderId}
+                  onSelectRider={setSelectedRiderId}
+                  pinMode={sidebarTab === 'create' ? pinMode : null}
+                  pickupPin={pickupCoords}
+                  dropoffPin={dropoffCoords}
+                  onMapPin={handleMapPin}
+                />
+              )}
+            </div>
+
+            {/* Active Deliveries Strip */}
+            {activeDeliveries.length > 0 && (
+              <div className="flex-shrink-0 bg-white border border-border shadow-sm rounded-xl p-4">
+                <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3">
+                  Livraisons actives ({activeDeliveries.length})
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {activeDeliveries.map(d => (
+                    <div key={d.id} className={`${statusColor[d.status]} border rounded-lg px-3 py-2 text-xs flex-shrink-0`}>
+                      <div className="font-semibold">{d.status}</div>
+                      <div className="text-[11px] opacity-80">
+                        {new Date(d.picked_up_at || d.accepted_at || d.created_at).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tracking is in dedicated Track tab */}
+          </div>
+
+          {/* Mobile FAB to open sidebar */}
+          <button
+            type="button"
+            onClick={() => setMobilePanelOpen(true)}
+            className="lg:hidden fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-sky-500 text-white shadow-lg flex items-center justify-center hover:bg-sky-600 active:scale-95 transition-all"
+            aria-label="Open panel"
+          >
+            <Menu size={24} />
+          </button>
+
+          {/* Mobile overlay backdrop */}
+          {mobilePanelOpen && !otpModalOpen && (
+            <div
+              className="lg:hidden fixed inset-0 z-40 bg-black/40"
+              onClick={() => setMobilePanelOpen(false)}
+            />
           )}
 
-          {/* Tracking is in dedicated Track tab */}
-        </div>
-
-        {/* Mobile FAB to open sidebar */}
-        <button
-          type="button"
-          onClick={() => setMobilePanelOpen(true)}
-          className="lg:hidden fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-sky-500 text-white shadow-lg flex items-center justify-center hover:bg-sky-600 active:scale-95 transition-all"
-          aria-label="Open panel"
-        >
-          <Menu size={24} />
-        </button>
-
-        {/* Mobile overlay backdrop */}
-        {mobilePanelOpen && !otpModalOpen && (
-          <div
-            className="lg:hidden fixed inset-0 z-40 bg-black/40"
-            onClick={() => setMobilePanelOpen(false)}
-          />
-        )}
-
-        {/* RIGHT: Sidebar — full overlay on mobile, normal sidebar on desktop */}
-        <div className={`
+          {/* RIGHT: Sidebar — full overlay on mobile, normal sidebar on desktop */}
+          <div className={`
           fixed inset-x-0 bottom-0 z-50 max-h-[85vh] rounded-t-2xl shadow-2xl
           lg:static lg:inset-auto lg:max-h-none lg:rounded-none lg:shadow-none lg:z-auto
           flex flex-col bg-white border-l border-border overflow-hidden
@@ -1100,552 +1131,551 @@ export default function BusinessDashboardPage() {
           lg:translate-y-0
         `}>
 
-          {/* Mobile drag handle + close */}
-          <div className="lg:hidden flex items-center justify-between px-4 pt-3 pb-1 flex-shrink-0">
-            <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto" />
-            <button
-              type="button"
-              onClick={() => setMobilePanelOpen(false)}
-              className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
-            >
-              <X size={20} />
-            </button>
-          </div>
+            {/* Mobile drag handle + close */}
+            <div className="lg:hidden flex items-center justify-between px-4 pt-3 pb-1 flex-shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto" />
+              <button
+                type="button"
+                onClick={() => setMobilePanelOpen(false)}
+                className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-          {/* Tab Navigation */}
-          <div className="flex border-b border-border flex-shrink-0 overflow-x-auto">
-            <button
-              onClick={() => { setSidebarTab('create'); setSelectedRiderId(null); }}
-              className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${
-                sidebarTab === 'create'
+            {/* Tab Navigation */}
+            <div className="flex border-b border-border flex-shrink-0 overflow-x-auto">
+              <button
+                onClick={() => { setSidebarTab('create'); setSelectedRiderId(null); }}
+                className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${sidebarTab === 'create'
                   ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Create
-            </button>
-            <button
-              onClick={() => setSidebarTab('track')}
-              className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${
-                sidebarTab === 'track'
+                  }`}
+              >
+                Create
+              </button>
+              <button
+                onClick={() => setSidebarTab('track')}
+                className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${sidebarTab === 'track'
                   ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Track
-            </button>
-            <button
-              onClick={() => setSidebarTab('subscription')}
-              className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${
-                sidebarTab === 'subscription'
+                  }`}
+              >
+                Track
+              </button>
+              <button
+                onClick={() => setSidebarTab('subscription')}
+                className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${sidebarTab === 'subscription'
                   ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <span className="hidden sm:inline">Subscription</span>
-              <span className="sm:hidden text-xs">Sub</span>
-            </button>
-            <button
-              onClick={() => setSidebarTab('wallet')}
-              className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${
-                sidebarTab === 'wallet'
+                  }`}
+              >
+                <span className="hidden sm:inline">Subscription</span>
+                <span className="sm:hidden text-xs">Sub</span>
+              </button>
+              <button
+                onClick={() => setSidebarTab('wallet')}
+                className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${sidebarTab === 'wallet'
                   ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <span className="hidden sm:inline">Portefeuille</span>
-              <span className="sm:hidden text-xs">Wallet</span>
-            </button>
-            <button
-              onClick={() => setSidebarTab('history')}
-              className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${
-                sidebarTab === 'history'
+                  }`}
+              >
+                <span className="hidden sm:inline">Portefeuille</span>
+                <span className="sm:hidden text-xs">Wallet</span>
+              </button>
+              <button
+                onClick={() => setSidebarTab('history')}
+                className={`flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors ${sidebarTab === 'history'
                   ? 'text-sky-600 border-b-2 border-sky-500 bg-sky-50'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <span className="hidden sm:inline">Historique</span>
-              <span className="sm:hidden text-xs">Hist</span>
-            </button>
-          </div>
+                  }`}
+              >
+                <span className="hidden sm:inline">Historique</span>
+                <span className="sm:hidden text-xs">Hist</span>
+              </button>
+            </div>
 
-          {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto">
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto">
 
-            {/* RIDERS TAB */}
-            {sidebarTab === 'create' && (
-              <div className="flex h-full flex-col overflow-hidden">
-                <form onSubmit={handleRequestDelivery} className="space-y-3 border-b border-border p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold text-sm text-foreground">Nouvelle livraison</div>
-                    {selectedRider && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedRiderId(null)}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="rounded-md border border-border bg-background px-3 py-2 text-xs">
-                    {selectedRider
-                      ? `Rider préféré: ${selectedRider.name} (${selectedRider.status})`
-                      : 'Aucun rider préféré (dispatch automatique ou admin manuel).'}
-                  </div>
-
-                  <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
-                    <div className="text-xs font-semibold text-foreground">Pin by map click</div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={pinMode === 'pickup' ? 'default' : 'outline'}
-                        onClick={() => setPinMode('pickup')}
-                      >
-                        Pickup pin
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={pinMode === 'dropoff' ? 'default' : 'outline'}
-                        onClick={() => setPinMode('dropoff')}
-                      >
-                        Dropoff pin
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setPickupCoords(null);
-                          setDropoffCoords(null);
-                          setRoutePreview(null);
-                        }}
-                      >
-                        Clear pins
-                      </Button>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Click on the map to place the {pinMode ?? 'dropoff'} pointer.
-                    </p>
-                    {(pickupCoords || dropoffCoords) && (
-                      <div className="text-[11px] text-muted-foreground space-y-1">
-                        {pickupCoords && <p>Pickup: {pickupCoords.lat.toFixed(5)}, {pickupCoords.lng.toFixed(5)}</p>}
-                        {dropoffCoords && <p>Dropoff: {dropoffCoords.lat.toFixed(5)}, {dropoffCoords.lng.toFixed(5)}</p>}
-                      </div>
-                    )}
-                    {routePreview && (
-                      <div className="rounded-md bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 text-xs text-indigo-700 flex items-center gap-2">
-                        <MapPin size={12} />
-                        <span>
-                          {routePreview.distance_m >= 1000
-                            ? `${(routePreview.distance_m / 1000).toFixed(1)} km`
-                            : `${Math.round(routePreview.distance_m)} m`}
-                          {' · '}
-                          {Math.ceil(routePreview.duration_s / 60)} min
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label htmlFor="pickup" className="text-xs text-muted-foreground">Adresse de départ</Label>
-                    <AddressAutocomplete
-                      id="pickup"
-                      value={pickupAddress}
-                      onChange={(address, coords) => {
-                        setPickupAddress(address);
-                        if (coords) setPickupCoords(coords);
-                      }}
-                      placeholder="Search pickup address (optional)"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="dropoff" className="text-xs text-muted-foreground">Adresse de livraison</Label>
-                    <AddressAutocomplete
-                      id="dropoff"
-                      value={dropoffAddress}
-                      onChange={(address, coords) => {
-                        setDropoffAddress(address);
-                        if (coords) setDropoffCoords(coords);
-                      }}
-                      placeholder="Search dropoff address"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="dropoff-phone" className="text-xs text-muted-foreground">Téléphone de livraison</Label>
-                    <Input
-                      id="dropoff-phone"
-                      value={dropoffPhone}
-                      onChange={(e) => setDropoffPhone(e.target.value)}
-                      placeholder="+212 6 00 00 00 00"
-                      className="mt-1 text-sm"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="note" className="text-xs text-muted-foreground">Note (optionnel)</Label>
-                    <Input
-                      id="note"
-                      value={deliveryNote}
-                      onChange={(e) => setDeliveryNote(e.target.value)}
-                      placeholder="Notes for rider"
-                      className="mt-1 text-sm"
-                    />
-                  </div>
-
-                  <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+              {/* RIDERS TAB */}
+              {sidebarTab === 'create' && (
+                <div className="flex h-full flex-col overflow-hidden">
+                  <form onSubmit={handleRequestDelivery} className="space-y-3 border-b border-border p-4">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="require-otp-on-create" className="text-xs font-semibold text-foreground">
-                        Require OTP validation
-                      </Label>
-                      <input
-                        id="require-otp-on-create"
-                        type="checkbox"
-                        checked={requireOtpOnCreate}
-                        onChange={(event) => {
-                          const checked = event.target.checked;
-                          setRequireOtpOnCreate(checked);
-                          if (!checked) {
-                            setCreateOtpValue('');
-                          }
+                      <div className="font-semibold text-sm text-foreground">Nouvelle livraison</div>
+                      {selectedRider && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRiderId(null)}
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="rounded-md border border-border bg-background px-3 py-2 text-xs">
+                      {selectedRider
+                        ? `Rider préféré: ${selectedRider.name} (${selectedRider.status})`
+                        : 'Aucun rider préféré (dispatch automatique ou admin manuel).'}
+                    </div>
+
+                    <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+                      <div className="text-xs font-semibold text-foreground">Pin by map click</div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={pinMode === 'pickup' ? 'default' : 'outline'}
+                          onClick={() => setPinMode('pickup')}
+                        >
+                          Pickup pin
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={pinMode === 'dropoff' ? 'default' : 'outline'}
+                          onClick={() => setPinMode('dropoff')}
+                        >
+                          Dropoff pin
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setPickupCoords(null);
+                            setDropoffCoords(null);
+                            setRoutePreview(null);
+                          }}
+                        >
+                          Clear pins
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Click on the map to place the {pinMode ?? 'dropoff'} pointer.
+                      </p>
+                      {(pickupCoords || dropoffCoords) && (
+                        <div className="text-[11px] text-muted-foreground space-y-1">
+                          {pickupCoords && <p>Pickup: {pickupCoords.lat.toFixed(5)}, {pickupCoords.lng.toFixed(5)}</p>}
+                          {dropoffCoords && <p>Dropoff: {dropoffCoords.lat.toFixed(5)}, {dropoffCoords.lng.toFixed(5)}</p>}
+                        </div>
+                      )}
+                      {routePreview && (
+                        <div className="rounded-md bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 text-xs text-indigo-700 flex items-center gap-2">
+                          <MapPin size={12} />
+                          <span>
+                            {routePreview.distance_m >= 1000
+                              ? `${(routePreview.distance_m / 1000).toFixed(1)} km`
+                              : `${Math.round(routePreview.distance_m)} m`}
+                            {' · '}
+                            {Math.ceil(routePreview.duration_s / 60)} min
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="pickup" className="text-xs text-muted-foreground">Adresse de départ</Label>
+                      <AddressAutocomplete
+                        id="pickup"
+                        value={pickupAddress}
+                        onChange={(address, coords) => {
+                          setPickupAddress(address);
+                          if (coords) setPickupCoords(coords);
                         }}
-                        className="h-4 w-4 accent-sky-500"
+                        placeholder="Search pickup address (optional)"
                       />
                     </div>
-                    {requireOtpOnCreate && (
-                      <div>
-                        <Label htmlFor="create-otp" className="text-xs text-muted-foreground">OTP (4 digits)</Label>
-                        <Input
-                          id="create-otp"
-                          value={createOtpValue}
-                          onChange={(event) => setCreateOtpValue(event.target.value.replace(/\D/g, '').slice(0, 4))}
-                          placeholder="1234"
-                          maxLength={4}
-                          inputMode="numeric"
-                          className="mt-1 text-sm"
-                          required
+
+                    <div>
+                      <Label htmlFor="dropoff" className="text-xs text-muted-foreground">Adresse de livraison</Label>
+                      <AddressAutocomplete
+                        id="dropoff"
+                        value={dropoffAddress}
+                        onChange={(address, coords) => {
+                          setDropoffAddress(address);
+                          if (coords) setDropoffCoords(coords);
+                        }}
+                        placeholder="Search dropoff address"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="dropoff-phone" className="text-xs text-muted-foreground">Téléphone de livraison</Label>
+                      <Input
+                        id="dropoff-phone"
+                        value={dropoffPhone}
+                        onChange={(e) => setDropoffPhone(e.target.value)}
+                        placeholder="+212 6 00 00 00 00"
+                        className="mt-1 text-sm"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="note" className="text-xs text-muted-foreground">Note (optionnel)</Label>
+                      <Input
+                        id="note"
+                        value={deliveryNote}
+                        onChange={(e) => setDeliveryNote(e.target.value)}
+                        placeholder="Notes for rider"
+                        className="mt-1 text-sm"
+                      />
+                    </div>
+
+                    <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="require-otp-on-create" className="text-xs font-semibold text-foreground">
+                          Require OTP validation
+                        </Label>
+                        <input
+                          id="require-otp-on-create"
+                          type="checkbox"
+                          checked={requireOtpOnCreate}
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setRequireOtpOnCreate(checked);
+                            if (!checked) {
+                              setCreateOtpValue('');
+                            }
+                          }}
+                          className="h-4 w-4 accent-sky-500"
                         />
                       </div>
-                    )}
-                    <p className="text-[11px] text-muted-foreground">
-                      If enabled, rider must validate delivery with OTP. Photo completion is disabled for that delivery.
-                    </p>
-                  </div>
-
-                  <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
-                    <div className="text-xs font-semibold text-foreground">Facturation</div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={billingMode === 'auto' ? 'default' : 'outline'}
-                        onClick={() => setBillingMode('auto')}
-                      >
-                        Auto
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={billingMode === 'payg' ? 'default' : 'outline'}
-                        onClick={() => setBillingMode('payg')}
-                      >
-                        Pay on Use
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={billingMode === 'wallet' ? 'default' : 'outline'}
-                        onClick={() => setBillingMode('wallet')}
-                      >
-                        Wallet+
-                      </Button>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Tarif applique: {billingPreview}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Pack: {hasActivePackCredits ? `${ridesRemaining} credits restants` : 'aucun credit actif'} · Wallet: {business.wallet_balance} MAD
-                    </p>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={submitting || !dropoffAddress || !dropoffPhone}
-                    className="w-full bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold hover:from-sky-600 hover:to-cyan-600"
-                  >
-                    {submitting ? 'Creating...' : 'Créer la livraison'}
-                  </Button>
-                </form>
-
-                <div className="border-b border-border p-4">
-                  <div className="text-sm font-semibold text-foreground">Rider availability</div>
-                  <div className="text-xs text-muted-foreground">
-                    {allRiders.length} total · {availableRiders.length} online
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto">
-                  {allRiders.map((r) => {
-                    const canSelect = r.status === 'available';
-                    const isSelected = selectedRiderId === r.id;
-                    return (
-                      <button
-                        key={r.id}
-                        onClick={() => canSelect && setSelectedRiderId(isSelected ? null : r.id)}
-                        className={`w-full px-4 py-3 border-b border-border text-left transition-colors ${
-                          canSelect ? 'hover:bg-sky-50' : 'opacity-70 cursor-not-allowed'
-                        } ${isSelected ? 'bg-sky-50' : ''}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`h-2 w-2 rounded-full ${r.status === 'available' ? 'bg-emerald-500' : r.status === 'busy' ? 'bg-amber-500' : 'bg-slate-400'}`} />
-                          <div className="font-semibold text-sm text-foreground">{r.name}</div>
+                      {requireOtpOnCreate && (
+                        <div>
+                          <Label htmlFor="create-otp" className="text-xs text-muted-foreground">OTP (4 digits)</Label>
+                          <Input
+                            id="create-otp"
+                            value={createOtpValue}
+                            onChange={(event) => setCreateOtpValue(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                            placeholder="1234"
+                            maxLength={4}
+                            inputMode="numeric"
+                            className="mt-1 text-sm"
+                            required
+                          />
                         </div>
-                        <div className="text-xs text-muted-foreground">{r.status} · last seen {formatLastSeen(r.last_seen_at)}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                      )}
+                      <p className="text-[11px] text-muted-foreground">
+                        If enabled, rider must validate delivery with OTP. Photo completion is disabled for that delivery.
+                      </p>
+                    </div>
 
-            {/* TRACK TAB */}
-            {sidebarTab === 'track' && (
-              <div className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-foreground">Tracking board</div>
-                  <div className="text-xs text-muted-foreground">{trackDeliveries.length} active</div>
-                </div>
+                    <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+                      <div className="text-xs font-semibold text-foreground">Facturation</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={billingMode === 'auto' ? 'default' : 'outline'}
+                          onClick={() => setBillingMode('auto')}
+                        >
+                          Auto
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={billingMode === 'payg' ? 'default' : 'outline'}
+                          onClick={() => setBillingMode('payg')}
+                        >
+                          Pay on Use
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={billingMode === 'wallet' ? 'default' : 'outline'}
+                          onClick={() => setBillingMode('wallet')}
+                        >
+                          Wallet+
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Tarif applique: {billingPreview}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Pack: {hasActivePackCredits ? `${ridesRemaining} credits restants` : 'aucun credit actif'} · Wallet: {business.wallet_balance} MAD
+                      </p>
+                    </div>
 
-                <EtaCountdownCard
-                  phase={riderEtaPhase}
-                  seconds={riderEtaSeconds}
-                  distanceM={riderEtaDistance}
-                />
+                    <Button
+                      type="submit"
+                      disabled={submitting || !dropoffAddress || !dropoffPhone}
+                      className="w-full bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold hover:from-sky-600 hover:to-cyan-600"
+                    >
+                      {submitting ? 'Creating...' : 'Créer la livraison'}
+                    </Button>
+                  </form>
 
-                {trackDeliveries.length === 0 ? (
-                  <div className="rounded-lg border border-border bg-background p-4 text-xs text-muted-foreground">
-                    No active deliveries. Create one in the Create tab.
+                  <div className="border-b border-border p-4">
+                    <div className="text-sm font-semibold text-foreground">Rider availability</div>
+                    <div className="text-xs text-muted-foreground">
+                      {allRiders.length} total · {availableRiders.length} online
+                    </div>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {trackDeliveries.map(d => {
-                      const countdown = getDispatchCountdown(d.created_at);
-                      const isOffered = d.status === 'offered';
-                      const isPending = d.status === 'pending';
-                      const isAccepted = d.status === 'accepted';
-                      const isDelivered = d.status === 'delivered';
-                      const podMethod = (d as any).pod_method as string | null | undefined;
-                      const podPhoto = (d as any).pod_photo_url as string | null | undefined;
-                      const canDispatch = isPending;
-                      const showCountdown = isPending || isOffered;
-                      const canSetOtp = ['accepted', 'picked_up', 'in_transit'].includes(d.status) && !isDelivered;
 
+                  <div className="flex-1 overflow-y-auto">
+                    {allRiders.map((r) => {
+                      const canSelect = r.status === 'available';
+                      const isSelected = selectedRiderId === r.id;
                       return (
-                        <div key={d.id} className="rounded-lg border border-border px-3 py-3 space-y-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-xs border rounded-full px-2 py-0.5 ${statusColor[d.status]}`}>{d.status}</span>
-                            {isAccepted && d.rider_name && (
-                              <span className="text-xs text-muted-foreground">Assigned: {d.rider_name}</span>
-                            )}
-                            {isDelivered && podMethod === 'otp' && (
-                              <span className="text-xs text-emerald-600">PoD: OTP verified</span>
-                            )}
-                            {isDelivered && podMethod === 'photo' && (
-                              <span className="text-xs text-emerald-600">PoD: Photo</span>
-                            )}
-                          </div>
-
-                          <p className="text-xs text-muted-foreground truncate">{d.pickup_address}</p>
-                          <p className="text-[11px] text-muted-foreground truncate">Dropoff: {d.dropoff_address} · {d.dropoff_phone}</p>
-                          <p className="text-[11px] text-muted-foreground">Created: {new Date(d.created_at).toLocaleString()}</p>
-                          {d.note && (
-                            <p className="text-[11px] text-muted-foreground truncate">Note: {d.note}</p>
-                          )}
-                          {showCountdown && (
-                            <p className="text-[11px] text-muted-foreground">Timeout: {countdown}s</p>
-                          )}
-
+                        <button
+                          key={r.id}
+                          onClick={() => canSelect && setSelectedRiderId(isSelected ? null : r.id)}
+                          className={`w-full px-4 py-3 border-b border-border text-left transition-colors ${canSelect ? 'hover:bg-sky-50' : 'opacity-70 cursor-not-allowed'
+                            } ${isSelected ? 'bg-sky-50' : ''}`}
+                        >
                           <div className="flex items-center gap-2">
-                            {canSetOtp && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  handleOpenOtpModal(d.id);
-                                }}
-                              >
-                                Set OTP
-                              </Button>
-                            )}
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={!canDispatch || dispatchingDeliveryId === d.id || isOffered}
-                              onClick={() => handleDispatchDelivery(d.id, selectedRider?.user_id ?? null)}
-                            >
-                              {isOffered ? 'Searching…' : 'Dispatch'}
-                            </Button>
-                            {isDelivered && podMethod === 'photo' && podPhoto && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleViewPodPhoto(d.id, podPhoto)}
-                              >
-                                View Photo
-                              </Button>
+                            <div className={`h-2 w-2 rounded-full ${r.status === 'available' ? 'bg-emerald-500' : r.status === 'busy' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                            <div className="font-semibold text-sm text-foreground">{r.name}</div>
+                            {!hasRealLocation(r) && (
+                              <span className="text-[10px] text-muted-foreground bg-slate-100 border border-slate-200 rounded px-1 py-0.5 ml-auto">
+                                No GPS
+                              </span>
                             )}
                           </div>
-                        </div>
+                          <div className="text-xs text-muted-foreground">{r.status} · last seen {formatLastSeen(r.last_seen_at)}</div>
+                        </button>
                       );
                     })}
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* SUBSCRIPTION TAB */}
-            {sidebarTab === 'subscription' && (
-              <div className="p-4 space-y-4">
-                {/* Current Status */}
-                {business.subscription_tier !== 'none' && (
-                  <div className="bg-sky-50 border border-sky-200 rounded-lg p-4">
-                    <div className="text-xs text-sky-600 font-semibold uppercase mb-2">Pack actif</div>
-                    <div className="text-sm font-bold text-sky-700 mb-2">{getPackTierLabel(business.subscription_tier)}</div>
-                    <div className="text-xs text-sky-600 mb-1">Renouvellement: {new Date(business.renewal_date || '').toLocaleDateString('fr-FR')}</div>
-                    <div className="text-xs text-sky-600">{ridesRemaining} / {business.rides_total} courses restantes</div>
-                    <div className="text-xs text-sky-700 mt-2">Tarif pack effectif: {PACK_UNIT_RATE} MAD / course</div>
-                    {!hasActivePackCredits && (
-                      <div className="text-xs text-amber-700 mt-2">Pack epuise. Rechargez un nouveau pack.</div>
-                    )}
+              {/* TRACK TAB */}
+              {sidebarTab === 'track' && (
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-foreground">Tracking board</div>
+                    <div className="text-xs text-muted-foreground">{trackDeliveries.length} active</div>
                   </div>
-                )}
-                {business.subscription_tier === 'none' && (
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                    <div className="text-xs text-slate-600 font-semibold uppercase mb-2">No active pack</div>
-                    <div className="text-sm text-slate-700">
-                      Your subscription pack is assigned by admin.
+
+                  <EtaCountdownCard
+                    phase={riderEtaPhase}
+                    seconds={riderEtaSeconds}
+                    distanceM={riderEtaDistance}
+                  />
+
+                  {trackDeliveries.length === 0 ? (
+                    <div className="rounded-lg border border-border bg-background p-4 text-xs text-muted-foreground">
+                      No active deliveries. Create one in the Create tab.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {trackDeliveries.map(d => {
+                        const countdown = getDispatchCountdown(d.created_at);
+                        const isOffered = d.status === 'offered';
+                        const isPending = d.status === 'pending';
+                        const isAccepted = d.status === 'accepted';
+                        const isDelivered = d.status === 'delivered';
+                        const podMethod = (d as any).pod_method as string | null | undefined;
+                        const podPhoto = (d as any).pod_photo_url as string | null | undefined;
+                        const canDispatch = isPending;
+                        const showCountdown = isPending || isOffered;
+                        const canSetOtp = ['accepted', 'picked_up', 'in_transit'].includes(d.status) && !isDelivered;
+
+                        return (
+                          <div key={d.id} className="rounded-lg border border-border px-3 py-3 space-y-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-xs border rounded-full px-2 py-0.5 ${statusColor[d.status]}`}>{d.status}</span>
+                              {isAccepted && d.rider_name && (
+                                <span className="text-xs text-muted-foreground">Assigned: {d.rider_name}</span>
+                              )}
+                              {isDelivered && podMethod === 'otp' && (
+                                <span className="text-xs text-emerald-600">PoD: OTP verified</span>
+                              )}
+                              {isDelivered && podMethod === 'photo' && (
+                                <span className="text-xs text-emerald-600">PoD: Photo</span>
+                              )}
+                            </div>
+
+                            <p className="text-xs text-muted-foreground truncate">{d.pickup_address}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">Dropoff: {d.dropoff_address} · {d.dropoff_phone}</p>
+                            <p className="text-[11px] text-muted-foreground">Created: {new Date(d.created_at).toLocaleString()}</p>
+                            {d.note && (
+                              <p className="text-[11px] text-muted-foreground truncate">Note: {d.note}</p>
+                            )}
+                            {showCountdown && (
+                              <p className="text-[11px] text-muted-foreground">Timeout: {countdown}s</p>
+                            )}
+
+                            <div className="flex items-center gap-2">
+                              {canSetOtp && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    handleOpenOtpModal(d.id);
+                                  }}
+                                >
+                                  Set OTP
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={!canDispatch || dispatchingDeliveryId === d.id || isOffered}
+                                onClick={() => handleDispatchDelivery(d.id, selectedRider?.user_id ?? null)}
+                              >
+                                {isOffered ? 'Searching…' : 'Dispatch'}
+                              </Button>
+                              {isDelivered && podMethod === 'photo' && podPhoto && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleViewPodPhoto(d.id, podPhoto)}
+                                >
+                                  View Photo
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUBSCRIPTION TAB */}
+              {sidebarTab === 'subscription' && (
+                <div className="p-4 space-y-4">
+                  {/* Current Status */}
+                  {business.subscription_tier !== 'none' && (
+                    <div className="bg-sky-50 border border-sky-200 rounded-lg p-4">
+                      <div className="text-xs text-sky-600 font-semibold uppercase mb-2">Pack actif</div>
+                      <div className="text-sm font-bold text-sky-700 mb-2">{getPackTierLabel(business.subscription_tier)}</div>
+                      <div className="text-xs text-sky-600 mb-1">Renouvellement: {new Date(business.renewal_date || '').toLocaleDateString('fr-FR')}</div>
+                      <div className="text-xs text-sky-600">{ridesRemaining} / {business.rides_total} courses restantes</div>
+                      <div className="text-xs text-sky-700 mt-2">Tarif pack effectif: {PACK_UNIT_RATE} MAD / course</div>
+                      {!hasActivePackCredits && (
+                        <div className="text-xs text-amber-700 mt-2">Pack epuise. Rechargez un nouveau pack.</div>
+                      )}
+                    </div>
+                  )}
+                  {business.subscription_tier === 'none' && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                      <div className="text-xs text-slate-600 font-semibold uppercase mb-2">No active pack</div>
+                      <div className="text-sm text-slate-700">
+                        Your subscription pack is assigned by admin.
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
+                    <div className="text-xs font-semibold uppercase text-emerald-700 mb-2">Pricing ladder</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Pay on Use: {PAY_ON_USE_RATE} MAD</div>
+                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Pack Credits: {PACK_UNIT_RATE} MAD</div>
+                      <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Wallet+: 25 / 22 / 20 / 18 MAD</div>
                     </div>
                   </div>
-                )}
 
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
-                  <div className="text-xs font-semibold uppercase text-emerald-700 mb-2">Pricing ladder</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                    <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Pay on Use: {PAY_ON_USE_RATE} MAD</div>
-                    <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Pack Credits: {PACK_UNIT_RATE} MAD</div>
-                    <div className="rounded-md border border-emerald-200 bg-white px-3 py-2">Wallet+: 25 / 22 / 20 / 18 MAD</div>
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
+                    Plan choice is disabled in the business portal.
+                    <div className="mt-1 text-xs text-sky-600">
+                      Contact admin to activate or change your subscription pack.
+                    </div>
                   </div>
                 </div>
+              )}
 
-                <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
-                  Plan choice is disabled in the business portal.
-                  <div className="mt-1 text-xs text-sky-600">
-                    Contact admin to activate or change your subscription pack.
+              {/* WALLET TAB */}
+              {sidebarTab === 'wallet' && (
+                <div className="p-4 space-y-4">
+                  {/* Balance Display */}
+                  <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-4">
+                    <div className="text-xs text-emerald-700 font-semibold uppercase mb-2">Solde actuel</div>
+                    <div className="text-2xl font-bold text-emerald-700">{business.wallet_balance} MAD</div>
+                  </div>
+
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
+                    Wallet credits are managed by admin only.
+                    <div className="mt-1 text-xs text-sky-600">
+                      Ask admin to add credit and select payment method: cash, card, or check.
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* WALLET TAB */}
-            {sidebarTab === 'wallet' && (
-              <div className="p-4 space-y-4">
-                {/* Balance Display */}
-                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-4">
-                  <div className="text-xs text-emerald-700 font-semibold uppercase mb-2">Solde actuel</div>
-                  <div className="text-2xl font-bold text-emerald-700">{business.wallet_balance} MAD</div>
-                </div>
-
-                <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
-                  Wallet credits are managed by admin only.
-                  <div className="mt-1 text-xs text-sky-600">
-                    Ask admin to add credit and select payment method: cash, card, or check.
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* HISTORY TAB */}
-            {sidebarTab === 'history' && (
-              <div className="p-4">
-                {completedDeliveries.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-center py-12">
-                    <Receipt size={24} className="text-gray-300 mb-3" />
-                    <div className="text-sm font-semibold text-muted-foreground mb-1">No delivery history yet</div>
-                    <div className="text-xs text-muted-foreground">Delivered, cancelled, and expired deliveries appear here.</div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {completedDeliveries.map((d) => {
-                      const badgeClass = statusColor[d.status] || 'bg-slate-100 text-slate-600 border-slate-200';
-                      return (
-                        <div key={d.id} className="bg-white border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className="bg-emerald-100 text-emerald-700 p-2 rounded-lg flex-shrink-0">
-                                <CheckCircle2 size={14} />
+              {/* HISTORY TAB */}
+              {sidebarTab === 'history' && (
+                <div className="p-4">
+                  {completedDeliveries.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center text-center py-12">
+                      <Receipt size={24} className="text-gray-300 mb-3" />
+                      <div className="text-sm font-semibold text-muted-foreground mb-1">No delivery history yet</div>
+                      <div className="text-xs text-muted-foreground">Delivered, cancelled, and expired deliveries appear here.</div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {completedDeliveries.map((d) => {
+                        const badgeClass = statusColor[d.status] || 'bg-slate-100 text-slate-600 border-slate-200';
+                        return (
+                          <div key={d.id} className="bg-white border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="bg-emerald-100 text-emerald-700 p-2 rounded-lg flex-shrink-0">
+                                  <CheckCircle2 size={14} />
+                                </div>
+                                <div className={`text-xs border rounded-full px-2 py-0.5 ${badgeClass}`}>{d.status}</div>
                               </div>
-                              <div className={`text-xs border rounded-full px-2 py-0.5 ${badgeClass}`}>{d.status}</div>
+                              <div className="text-xs text-muted-foreground">{d.rider_name || 'Unassigned'}</div>
                             </div>
-                            <div className="text-xs text-muted-foreground">{d.rider_name || 'Unassigned'}</div>
+                            <div className="text-sm font-semibold text-foreground truncate">{d.dropoff_address}</div>
+                            <div className="text-xs text-muted-foreground truncate">{d.pickup_address}</div>
+                            <div className="text-xs text-gray-500 mt-1">{new Date(d.completed_at || d.created_at).toLocaleString()}</div>
                           </div>
-                          <div className="text-sm font-semibold text-foreground truncate">{d.dropoff_address}</div>
-                          <div className="text-xs text-muted-foreground truncate">{d.pickup_address}</div>
-                          <div className="text-xs text-gray-500 mt-1">{new Date(d.completed_at || d.created_at).toLocaleString()}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    {/* OTP Modal - Rendered outside main grid to ensure visibility */}
-    {otpModalOpen && (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={() => setOtpModalOpen(false)}>
-        <div
-          className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div>
-            <h3 className="text-lg font-semibold">Set Delivery OTP</h3>
-            <p className="text-sm text-muted-foreground">Enter a 4-digit OTP code. The rider will need this to confirm delivery.</p>
-          </div>
-          <div className="space-y-3">
-            <Input
-              autoFocus
-              value={otpValue}
-              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              placeholder="1234"
-              maxLength={4}
-              inputMode="numeric"
-              className="text-center text-2xl tracking-[0.5em] font-bold"
-            />
-            {otpError && <p className="text-xs text-red-500">{otpError}</p>}
-          </div>
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={() => setOtpModalOpen(false)}>Cancel</Button>
-            <Button type="button" onClick={handleSetOtp} disabled={otpSubmitting}>Save OTP</Button>
+      {/* OTP Modal - Rendered outside main grid to ensure visibility */}
+      {otpModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={() => setOtpModalOpen(false)}>
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-lg font-semibold">Set Delivery OTP</h3>
+              <p className="text-sm text-muted-foreground">Enter a 4-digit OTP code. The rider will need this to confirm delivery.</p>
+            </div>
+            <div className="space-y-3">
+              <Input
+                autoFocus
+                value={otpValue}
+                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="1234"
+                maxLength={4}
+                inputMode="numeric"
+                className="text-center text-2xl tracking-[0.5em] font-bold"
+              />
+              {otpError && <p className="text-xs text-red-500">{otpError}</p>}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setOtpModalOpen(false)}>Cancel</Button>
+              <Button type="button" onClick={handleSetOtp} disabled={otpSubmitting}>Save OTP</Button>
+            </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
     </>
   );
 }
