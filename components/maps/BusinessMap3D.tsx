@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { Map as MapLibreMap, MapLayerMouseEvent } from 'maplibre-gl';
 import type { Rider } from '@/lib/types';
@@ -14,8 +14,8 @@ import {
   upsertPointLayers,
 } from '@/components/maps/layers';
 import type { MapLineFeature, MapPointFeature } from '@/components/maps/types';
+import { fetchOsrmRoute } from '@/lib/navigation/osrm';
 
-const MAP_BOUNDS = { latMin: 35.65, latMax: 35.83, lngMin: -5.98, lngMax: -5.70 };
 const DEFAULT_BIZ_LOCATION = { lat: 35.7595, lng: -5.8340 };
 
 const RIDERS_SOURCE_ID = 'business-riders-source';
@@ -29,13 +29,9 @@ const ROUTE_SOURCE_ID = 'business-route-source';
 const ROUTE_LAYER_ID = 'business-route-layer';
 const ROUTE_GLOW_LAYER_ID = 'business-route-glow-layer';
 
-function seedLocation(id: string): { lat: number; lng: number } {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
-  const lat = MAP_BOUNDS.latMin + ((h & 0xff) / 255) * (MAP_BOUNDS.latMax - MAP_BOUNDS.latMin);
-  const lng = MAP_BOUNDS.lngMin + (((h >> 8) & 0xff) / 255) * (MAP_BOUNDS.lngMax - MAP_BOUNDS.lngMin);
-  return { lat, lng };
-}
+const DELIVERY_ROUTE_SOURCE_ID = 'business-delivery-route-source';
+const DELIVERY_ROUTE_LAYER_ID = 'business-delivery-route-layer';
+const DELIVERY_ROUTE_GLOW_LAYER_ID = 'business-delivery-route-glow-layer';
 
 function getRiderLocation(rider: Rider): { lat: number; lng: number } {
   if (typeof rider.last_lat === 'number' && typeof rider.last_lng === 'number') {
@@ -45,13 +41,24 @@ function getRiderLocation(rider: Rider): { lat: number; lng: number } {
   const fromJson = rider.current_location as { lat: number; lng: number } | null;
   if (fromJson) return fromJson;
 
-  return seedLocation(rider.id);
+  // Deterministic fallback
+  let h = 0;
+  for (let i = 0; i < rider.id.length; i++) h = (h * 31 + rider.id.charCodeAt(i)) & 0xffff;
+  return {
+    lat: 35.65 + ((h & 0xff) / 255) * 0.18,
+    lng: -5.98 + (((h >> 8) & 0xff) / 255) * 0.28,
+  };
 }
 
 function getRiderStatusColor(status: Rider['status']): string {
   if (status === 'available') return '#10b981';
   if (status === 'busy') return '#f59e0b';
   return '#94a3b8';
+}
+
+export interface RoutePreview {
+  distance_m: number;
+  duration_s: number;
 }
 
 interface BusinessMap3DProps {
@@ -63,6 +70,7 @@ interface BusinessMap3DProps {
   pickupPin?: { lat: number; lng: number } | null;
   dropoffPin?: { lat: number; lng: number } | null;
   onMapPin?: (lat: number, lng: number) => void;
+  onRoutePreview?: (preview: RoutePreview | null) => void;
   className?: string;
   fallback?: ReactNode;
 }
@@ -76,6 +84,7 @@ export function BusinessMap3D({
   pickupPin = null,
   dropoffPin = null,
   onMapPin,
+  onRoutePreview,
   className,
   fallback = null,
 }: BusinessMap3DProps) {
@@ -84,6 +93,41 @@ export function BusinessMap3D({
   const previousSelectedRiderRef = useRef<string | null>(null);
   const lastCenteredBusinessRef = useRef<{ lat: number; lng: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [deliveryRoutePoints, setDeliveryRoutePoints] = useState<{ lat: number; lng: number }[]>([]);
+  const routeFetchRef = useRef(0); // For cancellation
+
+  // Fetch OSRM route when pickup + dropoff are both set
+  const fetchRoute = useCallback(async (
+    origin: { lat: number; lng: number },
+    destination: { lat: number; lng: number }
+  ) => {
+    const fetchId = ++routeFetchRef.current;
+    try {
+      const result = await fetchOsrmRoute(origin, destination);
+      if (fetchId !== routeFetchRef.current) return; // stale
+      if (result.ok && result.geometry.length >= 2) {
+        setDeliveryRoutePoints(result.geometry);
+        onRoutePreview?.({ distance_m: result.distance_m, duration_s: result.duration_s });
+      } else {
+        // Fallback to straight line
+        setDeliveryRoutePoints([origin, destination]);
+        onRoutePreview?.(null);
+      }
+    } catch {
+      setDeliveryRoutePoints([origin, destination]);
+      onRoutePreview?.(null);
+    }
+  }, [onRoutePreview]);
+
+  useEffect(() => {
+    const origin = pickupPin ?? mapCenter;
+    if (dropoffPin) {
+      fetchRoute(origin, dropoffPin);
+    } else {
+      setDeliveryRoutePoints([]);
+      onRoutePreview?.(null);
+    }
+  }, [pickupPin?.lat, pickupPin?.lng, dropoffPin?.lat, dropoffPin?.lng, mapCenter.lat, mapCenter.lng, fetchRoute, onRoutePreview]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -160,8 +204,9 @@ export function BusinessMap3D({
         : []),
     ];
 
+    // Rider selection route (straight line to business)
     const selectedRider = riders.find((rider) => rider.id === selectedRiderId) ?? null;
-    const routeLines: MapLineFeature[] = selectedRider
+    const riderRouteLines: MapLineFeature[] = selectedRider
       ? [{
           id: `route-${selectedRider.id}`,
           points: [mapCenter, getRiderLocation(selectedRider)],
@@ -174,18 +219,43 @@ export function BusinessMap3D({
         }]
       : [];
 
+    // Delivery route (OSRM-based pickup→dropoff route)
+    const deliveryRouteLines: MapLineFeature[] = deliveryRoutePoints.length >= 2
+      ? [{
+          id: 'delivery-route',
+          points: deliveryRoutePoints,
+          color: '#6366f1',
+          width: 4,
+          opacity: 0.9,
+          glowColor: '#6366f1',
+          glowWidth: 10,
+          dashed: false,
+        }]
+      : [];
+
     upsertGeoJsonSource(map, RIDERS_SOURCE_ID, pointFeaturesToGeoJson(riderPoints));
     upsertPointLayers(map, RIDERS_SOURCE_ID, RIDERS_LAYER_ID, RIDERS_LABEL_LAYER_ID);
 
     upsertGeoJsonSource(map, STATIC_POINTS_SOURCE_ID, pointFeaturesToGeoJson(staticPoints));
     upsertPointLayers(map, STATIC_POINTS_SOURCE_ID, STATIC_POINTS_LAYER_ID);
 
-    upsertGeoJsonSource(map, ROUTE_SOURCE_ID, lineFeaturesToGeoJson(routeLines));
+    upsertGeoJsonSource(map, ROUTE_SOURCE_ID, lineFeaturesToGeoJson(riderRouteLines));
     upsertLineLayers(map, ROUTE_SOURCE_ID, ROUTE_LAYER_ID, ROUTE_GLOW_LAYER_ID);
 
+    upsertGeoJsonSource(map, DELIVERY_ROUTE_SOURCE_ID, lineFeaturesToGeoJson(deliveryRouteLines));
+    upsertLineLayers(map, DELIVERY_ROUTE_SOURCE_ID, DELIVERY_ROUTE_LAYER_ID, DELIVERY_ROUTE_GLOW_LAYER_ID);
+
+    // Fit to show all relevant points
     if (selectedRider) {
       fitMapToPoints(map, [mapCenter, getRiderLocation(selectedRider)], 15);
       previousSelectedRiderRef.current = selectedRider.id;
+      return;
+    }
+
+    if (deliveryRoutePoints.length >= 2) {
+      const origin = pickupPin ?? mapCenter;
+      fitMapToPoints(map, [origin, dropoffPin!], 15);
+      previousSelectedRiderRef.current = null;
       return;
     }
 
@@ -197,7 +267,7 @@ export function BusinessMap3D({
       });
       previousSelectedRiderRef.current = null;
     }
-  }, [dropoffPin, mapCenter, mapReady, pickupPin, riders, selectedRiderId]);
+  }, [deliveryRoutePoints, dropoffPin, mapCenter, mapReady, pickupPin, riders, selectedRiderId]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -212,6 +282,8 @@ export function BusinessMap3D({
           ? feature.properties.id
           : null;
       if (!riderId) return;
+      const rider = riders.find((entry) => entry.id === riderId);
+      if (!rider || rider.status !== 'available') return;
 
       onSelectRider(riderId === selectedRiderId ? null : riderId);
     };
@@ -246,7 +318,7 @@ export function BusinessMap3D({
       map.off('mouseenter', RIDERS_LAYER_ID, onMouseEnter);
       map.off('mouseleave', RIDERS_LAYER_ID, onMouseLeave);
     };
-  }, [mapReady, onMapPin, onSelectRider, pinMode, selectedRiderId]);
+  }, [mapReady, onMapPin, onSelectRider, pinMode, riders, selectedRiderId]);
 
   return (
     <Map3DBase

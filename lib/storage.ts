@@ -39,6 +39,31 @@ function normalizeBusinessRow(row: unknown): Business {
   };
 }
 
+async function notifyRiderOffers(offerIds: string[]): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (offerIds.length === 0) return;
+
+  try {
+    const supabase = getSupabase();
+    const { data: authData } = await supabase.auth.getSession();
+    const accessToken = authData.session?.access_token ?? '';
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    await fetch('/api/rider/offers/notify', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(accessToken
+        ? { offer_ids: offerIds, access_token: accessToken }
+        : { offer_ids: offerIds }),
+    });
+  } catch (error) {
+    console.error('Offer push notification enqueue failed', error);
+  }
+}
+
 // User management
 export const userService = {
   getAll: async (): Promise<User[]> => {
@@ -298,6 +323,37 @@ export const riderService = {
   },
 };
 
+/* Push subscription management */
+export const pushSubscriptionService = {
+  upsert: async (subscription: PushSubscriptionJSON): Promise<void> => {
+    const { data: { user } } = await getSupabase().auth.getUser();
+    if (!user) return;
+
+    const keys = subscription.keys ?? {};
+    await getSupabase()
+      .from('push_subscriptions')
+      .upsert(
+        {
+          user_id: user.id,
+          endpoint: subscription.endpoint ?? '',
+          p256dh_key: (keys.p256dh as string) ?? '',
+          auth_key: (keys.auth as string) ?? '',
+        },
+        { onConflict: 'user_id' }
+      );
+  },
+
+  remove: async (): Promise<void> => {
+    const { data: { user } } = await getSupabase().auth.getUser();
+    if (!user) return;
+
+    await getSupabase()
+      .from('push_subscriptions')
+      .delete()
+      .eq('user_id', user.id);
+  },
+};
+
 // Delivery management
 type DeliveryRow = Delivery & { businesses?: { name: string } | null; riders?: { name: string } | null };
 
@@ -362,7 +418,21 @@ export const deliveryService = {
       .from('deliveries')
       .select('*, businesses(name), riders(name)')
       .in('status', ['pending', 'offered', 'accepted', 'picked_up', 'in_transit']);
-      
+
+    return (data || []).map((d: DeliveryRow) => ({
+      ...d,
+      business_name: d.businesses?.name || 'Unknown',
+      rider_name: d.riders?.name || null,
+    })) as Delivery[];
+  },
+
+  getPendingUnassigned: async (): Promise<Delivery[]> => {
+    const { data } = await getSupabase()
+      .from('deliveries')
+      .select('*, businesses(name), riders(name)')
+      .eq('status', 'pending')
+      .is('rider_id', null);
+
     return (data || []).map((d: DeliveryRow) => ({
       ...d,
       business_name: d.businesses?.name || 'Unknown',
@@ -456,7 +526,11 @@ export const deliveryService = {
       return [];
     }
     if (Array.isArray(data)) {
-      if (data.length > 0) return data as DeliveryOffer[];
+      if (data.length > 0) {
+        const offers = data as DeliveryOffer[];
+        void notifyRiderOffers(offers.map((offer) => offer.id));
+        return offers;
+      }
       const latest = await deliveryService.getById(deliveryId);
       if (latest && (latest.rider_id || latest.status === 'offered' || latest.status === 'accepted')) {
         return [];
@@ -533,26 +607,35 @@ export const deliveryService = {
     if (error && !isMissingRpcError(error)) throw error;
   },
 
-  setDeliveryOtp: async (deliveryId: string, otp: string): Promise<{ delivery_id: string; expires_at: string } | null> => {
+  setDeliveryOtp: async (deliveryId: string, otp: string): Promise<{ delivery_id: string; expires_at: string }> => {
     const { data, error } = await getSupabase()
       .rpc('set_delivery_otp', { p_delivery_id: deliveryId, p_otp: otp });
     if (error) {
-      if (isMissingRpcError(error)) return null;
+      if (isMissingRpcError(error)) {
+        throw new Error('OTP backend is not available. Apply latest Supabase migrations (set_delivery_otp).');
+      }
       throw error;
     }
-    return (data as { delivery_id: string; expires_at: string }) || null;
+    if (!data) {
+      throw new Error('OTP could not be created. Please retry.');
+    }
+    return data as { delivery_id: string; expires_at: string };
   },
 
-  verifyDeliveryOtp: async (deliveryId: string, otp: string): Promise<Delivery | null> => {
+  verifyDeliveryOtp: async (deliveryId: string, otp: string): Promise<Delivery> => {
     const { data, error } = await getSupabase()
       .rpc('verify_delivery_otp', { p_delivery_id: deliveryId, p_otp: otp });
     if (error) {
       if (isMissingRpcError(error)) {
-        return await deliveryService.update(deliveryId, { status: 'in_transit' } as Partial<Delivery>);
+        throw new Error('OTP backend is not available. Apply latest Supabase migrations (verify_delivery_otp).');
       }
-      throw error;
+      // Convert PostgrestError to proper Error so .message is accessible in catch blocks
+      throw new Error(error.message || 'OTP verification failed');
     }
-    return (data as Delivery) || null;
+    if (!data) {
+      throw new Error('OTP verification failed. Please retry.');
+    }
+    return data as Delivery;
   },
 
   submitDeliveryPhoto: async (deliveryId: string, photoPath: string): Promise<Delivery | null> => {
@@ -567,7 +650,16 @@ export const deliveryService = {
           completed_at: now,
         } as Partial<Delivery>);
       }
-      throw error;
+      throw new Error(error.message || 'Photo upload failed');
+    }
+    return (data as Delivery) || null;
+  },
+
+  completeDeliveryDirect: async (deliveryId: string): Promise<Delivery | null> => {
+    const { data, error } = await getSupabase()
+      .rpc('complete_delivery_direct', { p_delivery_id: deliveryId });
+    if (error) {
+      throw new Error(error.message || 'Failed to complete delivery');
     }
     return (data as Delivery) || null;
   },

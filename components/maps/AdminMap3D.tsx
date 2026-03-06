@@ -83,11 +83,20 @@ function getRouteColor(status: Delivery['status']): string {
 interface AdminMap3DProps {
   riders: Rider[];
   deliveries: Delivery[];
+  focusDeliveryId?: string | null;
+  focusRiderId?: string | null;
   className?: string;
   fallback?: ReactNode;
 }
 
-export function AdminMap3D({ riders, deliveries, className, fallback = null }: AdminMap3DProps) {
+export function AdminMap3D({
+  riders,
+  deliveries,
+  focusDeliveryId = null,
+  focusRiderId = null,
+  className,
+  fallback = null,
+}: AdminMap3DProps) {
   const mapRef = useRef<MapLibreMap | null>(null);
   const didFitBoundsRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
@@ -98,6 +107,10 @@ export function AdminMap3D({ riders, deliveries, className, fallback = null }: A
     const map = mapRef.current;
     const activeStatuses: Delivery['status'][] = ['pending', 'offered', 'accepted', 'picked_up', 'in_transit'];
     const activeDeliveries = deliveries.filter((delivery) => activeStatuses.includes(delivery.status));
+    const focusedDelivery = focusDeliveryId ? deliveries.find((delivery) => delivery.id === focusDeliveryId) : null;
+    if (focusedDelivery && !activeDeliveries.some((delivery) => delivery.id === focusedDelivery.id)) {
+      activeDeliveries.push(focusedDelivery);
+    }
 
     const riderPoints: MapPointFeature[] = riders.map((rider) => {
       const location = getRiderLocation(rider);
@@ -173,7 +186,38 @@ export function AdminMap3D({ riders, deliveries, className, fallback = null }: A
         didFitBoundsRef.current = true;
       }
     }
-  }, [deliveries, mapReady, riders]);
+  }, [deliveries, focusDeliveryId, mapReady, riders]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    if (!focusDeliveryId && !focusRiderId) return;
+
+    const focusPoints: Array<{ lat: number; lng: number }> = [];
+    if (focusRiderId) {
+      const rider = riders.find((row) => row.id === focusRiderId);
+      if (rider) {
+        focusPoints.push(getRiderLocation(rider));
+      }
+    }
+
+    if (focusDeliveryId) {
+      const delivery = deliveries.find((row) => row.id === focusDeliveryId);
+      if (delivery) {
+        focusPoints.push(getDeliveryPoint(delivery, 'pickup'));
+        focusPoints.push(getDeliveryPoint(delivery, 'dropoff'));
+        if (delivery.rider_id) {
+          const rider = riders.find((row) => row.id === delivery.rider_id);
+          if (rider) {
+            focusPoints.push(getRiderLocation(rider));
+          }
+        }
+      }
+    }
+
+    if (focusPoints.length > 0) {
+      fitMapToPoints(mapRef.current, focusPoints, 15);
+    }
+  }, [deliveries, focusDeliveryId, focusRiderId, mapReady, riders]);
 
   return (
     <Map3DBase

@@ -1,0 +1,2 @@
+-- Placeholder migration to align local files with an already-applied remote migration version.
+-- Original migration contents are not available in this repository.

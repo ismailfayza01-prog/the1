@@ -79,8 +79,11 @@ export interface Delivery {
   picked_up_at: string | null;
   delivered_at?: string | null;
   completed_at: string | null;
+  pod_method?: 'otp' | 'photo' | null;
   pod_photo_url?: string | null;
   pod_otp_verified_at?: string | null;
+  otp_verified?: boolean | null;
+  otp_expires_at?: string | null;
 }
 
 export interface Transaction {

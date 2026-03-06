@@ -5,15 +5,18 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+// Dialog replaced with custom OTP modal for z-index reliability on mobile
 import { createClient } from '@/lib/supabase/client';
 import { userService, businessService, deliveryService, riderService } from '@/lib/storage';
 import { MAP_3D_ENABLED } from '@/components/maps/config';
-import { BusinessMap3D } from '@/components/maps/BusinessMap3D';
+import { BusinessMap3D, type RoutePreview } from '@/components/maps/BusinessMap3D';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { geocodeReverse } from '@/lib/geocode';
+import { fetchOsrmRoute } from '@/lib/navigation/osrm';
 import 'leaflet/dist/leaflet.css';
 import {
   MapPin, Package, CreditCard, LogOut,
-  Home, Wallet, X, Bike, Receipt, CheckCircle2,
+  Home, Wallet, X, Bike, Receipt, CheckCircle2, Menu,
 } from 'lucide-react';
 import {
   getRiderCommission,
@@ -30,7 +33,6 @@ import { haversineMeters } from '@/lib/geo';
 // Tangier bounding box
 const MAP_BOUNDS = { latMin: 35.65, latMax: 35.83, lngMin: -5.98, lngMax: -5.70 };
 const DEFAULT_BIZ_LOCATION = { lat: 35.7595, lng: -5.8340 };
-const NEARBY_RIDER_RADIUS_METERS = 5000;
 const PAY_ON_USE_RATE = 30;
 const PACK_UNIT_RATE = 25;
 
@@ -227,6 +229,7 @@ function BusinessMap({
   const ridersLayerRef = useRef<any>(null);
   const pinsLayerRef = useRef<any>(null);
   const routeLineRef = useRef<any>(null);
+  const deliveryRouteRef = useRef<any>(null);
   const hadSelectedRouteRef = useRef(false);
 
   useEffect(() => {
@@ -276,6 +279,12 @@ function BusinessMap({
         dashArray: '6 6',
       }).addTo(map);
 
+      deliveryRouteRef.current = L.polyline([], {
+        color: '#6366f1',
+        weight: 4,
+        opacity: 0.85,
+      }).addTo(map);
+
       mapRef.current = map;
       setTimeout(() => map.invalidateSize(), 50);
     };
@@ -291,6 +300,7 @@ function BusinessMap({
       ridersLayerRef.current = null;
       pinsLayerRef.current = null;
       routeLineRef.current = null;
+      deliveryRouteRef.current = null;
       businessMarkerRef.current = null;
       leafletRef.current = null;
       hadSelectedRouteRef.current = false;
@@ -326,7 +336,10 @@ function BusinessMap({
       marker
         .addTo(layer)
         .bindTooltip(`${rider.name} · ${rider.status}`, { direction: 'top', offset: [0, -8] })
-        .on('click', () => onSelectRider(isSelected ? null : rider.id));
+        .on('click', () => {
+          if (rider.status !== 'available') return;
+          onSelectRider(isSelected ? null : rider.id);
+        });
     }
 
     const selected = riders.find((r) => r.id === selectedRiderId);
@@ -376,6 +389,47 @@ function BusinessMap({
         .bindTooltip('Dropoff pin', { direction: 'top', offset: [0, -8] });
     }
   }, [pickupPin, dropoffPin]);
+
+  // Fetch and display OSRM route when both pickup and dropoff exist
+  useEffect(() => {
+    if (!mapRef.current || !deliveryRouteRef.current) return;
+    const route = deliveryRouteRef.current;
+    const map = mapRef.current;
+
+    if (!dropoffPin) {
+      route.setLatLngs([]);
+      return;
+    }
+
+    const origin = pickupPin ?? businessLocation;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const result = await fetchOsrmRoute(origin, dropoffPin);
+        if (cancelled) return;
+        if (result.ok && result.geometry.length >= 2) {
+          route.setLatLngs(result.geometry.map((p: { lat: number; lng: number }) => [p.lat, p.lng]));
+        } else {
+          route.setLatLngs([[origin.lat, origin.lng], [dropoffPin.lat, dropoffPin.lng]]);
+        }
+        const leafletRef2 = leafletRef.current;
+        if (leafletRef2) {
+          const bounds = leafletRef2.latLngBounds(
+            [origin.lat, origin.lng],
+            [dropoffPin.lat, dropoffPin.lng]
+          );
+          map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 });
+        }
+      } catch {
+        if (!cancelled) {
+          route.setLatLngs([[origin.lat, origin.lng], [dropoffPin.lat, dropoffPin.lng]]);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [pickupPin, dropoffPin, businessLocation]);
 
   useEffect(() => {
     if (!mapRef.current || !onMapPin) return;
@@ -431,11 +485,13 @@ export default function BusinessDashboardPage() {
   const [pickupCoords, setPickupCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [pinMode, setPinMode] = useState<'pickup' | 'dropoff' | null>('dropoff');
+  const [routePreview, setRoutePreview] = useState<{ distance_m: number; duration_s: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [allRiders, setAllRiders] = useState<Rider[]>([]);
 
   // Subscription UI state
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'create' | 'track' | 'subscription' | 'wallet' | 'history'>('create');
   const [billingMode, setBillingMode] = useState<BillingMode>('auto');
   const [dispatchingDeliveryId, setDispatchingDeliveryId] = useState<string | null>(null);
@@ -445,6 +501,8 @@ export default function BusinessDashboardPage() {
   const [otpValue, setOtpValue] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const [requireOtpOnCreate, setRequireOtpOnCreate] = useState(false);
+  const [createOtpValue, setCreateOtpValue] = useState('');
 
   const [riderEtaSeconds, setRiderEtaSeconds] = useState<number | null>(null);
   const [riderEtaPhase, setRiderEtaPhase] = useState<'to_pickup' | 'to_dropoff' | 'delivered' | null>(null);
@@ -455,27 +513,43 @@ export default function BusinessDashboardPage() {
   useEffect(() => {
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let realtimeDebounce: ReturnType<typeof setTimeout> | null = null;
+    let userIdRef: string | null = null;
+
+    const debouncedLoad = () => {
+      if (realtimeDebounce) clearTimeout(realtimeDebounce);
+      realtimeDebounce = setTimeout(() => {
+        if (userIdRef) void loadData(userIdRef);
+      }, 500);
+    };
 
     async function init() {
       const user = await userService.getCurrentUser();
       if (!user || user.role !== 'business') { router.push('/business'); return; }
+      userIdRef = user.id;
       setCurrentUser(user);
       await loadData(user.id);
       channel = supabase.channel('business-dashboard')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => loadData(user.id))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => loadData(user.id))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, () => loadData(user.id))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, debouncedLoad)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, debouncedLoad)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, debouncedLoad)
         .subscribe();
     }
     init();
-    const poller = setInterval(() => {
-      if (currentUser?.id) loadData(currentUser.id);
-    }, 8000);
+
+    // Safety-net poll every 60s in case realtime drops
+    pollInterval = setInterval(() => {
+      if (userIdRef) void loadData(userIdRef);
+    }, 60000);
+
     return () => {
       if (channel) supabase.removeChannel(channel);
-      clearInterval(poller);
+      if (pollInterval) clearInterval(pollInterval);
+      if (realtimeDebounce) clearTimeout(realtimeDebounce);
     };
-  }, [router, currentUser?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
@@ -599,8 +673,10 @@ export default function BusinessDashboardPage() {
       setBusiness(biz);
       setDeliveries(await deliveryService.getByBusinessId(biz.id));
     }
-    setAvailableRiders(await riderService.getAvailable());
-    setAllRiders(await riderService.getAll());
+    // Single fetch — derive available from allRiders to cut DB calls in half
+    const all = await riderService.getAll();
+    setAllRiders(all);
+    setAvailableRiders(all.filter((r) => r.status === 'available'));
   };
 
   const handleLogout = async () => { await userService.logout(); router.push('/business'); };
@@ -609,42 +685,51 @@ export default function BusinessDashboardPage() {
     [business?.id, business?.location_lat, business?.location_lng]
   );
   const businessMapKey = `${business?.id ?? 'unknown'}:${businessLocation.lat.toFixed(6)}:${businessLocation.lng.toFixed(6)}`;
-  const { sortedAvailableRiders, ridersForMap } = useMemo(() => {
-    const sorted = [...availableRiders].sort((a, b) => {
+  const ridersForMap = useMemo(() => {
+    return [...allRiders].sort((a, b) => {
       const distA = haversineMeters(getRiderLocation(a), businessLocation);
       const distB = haversineMeters(getRiderLocation(b), businessLocation);
       return distA - distB;
     });
-    const nearby = sorted.filter(
-      (rider) => haversineMeters(getRiderLocation(rider), businessLocation) <= NEARBY_RIDER_RADIUS_METERS
-    );
-    return {
-      sortedAvailableRiders: sorted,
-      ridersForMap: nearby.length > 0 ? nearby : sorted,
-    };
-  }, [availableRiders, businessLocation]);
-  const selectedRider = ridersForMap.find(r => r.id === selectedRiderId) ?? allRiders.find(r => r.id === selectedRiderId) ?? null;
+  }, [allRiders, businessLocation]);
+  const selectedRider = ridersForMap.find(r => r.id === selectedRiderId) ?? null;
 
-  const handleMapPin = (lat: number, lng: number) => {
+  const handleMapPin = async (lat: number, lng: number) => {
     const coordLabel = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     if (pinMode === 'pickup') {
       setPickupCoords({ lat, lng });
       setPickupAddress(`Pinned at ${coordLabel}`);
+      // Reverse geocode to get a real address name
+      const address = await geocodeReverse(lat, lng);
+      setPickupAddress(address);
       return;
     }
     if (pinMode === 'dropoff') {
       setDropoffCoords({ lat, lng });
       setDropoffAddress(`Pinned at ${coordLabel}`);
+      const address = await geocodeReverse(lat, lng);
+      setDropoffAddress(address);
     }
   };
 
   const handleRequestDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!business) return;
+    if (!dropoffCoords) {
+      setSuccessMsg('Veuillez selectionner une adresse de livraison depuis les suggestions ou pointer sur la carte.');
+      setTimeout(() => setSuccessMsg(''), 5000);
+      return;
+    }
+    if (requireOtpOnCreate && !/^\d{4}$/.test(createOtpValue)) {
+      setSuccessMsg('OTP must be exactly 4 digits when OTP is required.');
+      setTimeout(() => setSuccessMsg(''), 4000);
+      return;
+    }
     setSubmitting(true);
     try {
       const preferredRiderUserId = selectedRider?.user_id ?? null;
       let dispatchConfirmed = false;
+      let otpSetOnCreate = false;
       const ridesRemainingNow = Math.max(0, business.rides_total - business.rides_used);
       const hasPackCredits = business.subscription_tier !== 'none' && ridesRemainingNow > 0;
       const walletUnitRate = getWalletUnitRate(business.wallet_balance);
@@ -674,13 +759,13 @@ export default function BusinessDashboardPage() {
         rider_id: null,
         rider_name: null,
         pickup_address: pickupAddress || `${business.name} (pickup)`,
-        pickup_lat: pickupCoords?.lat ?? (businessLocation.lat + (Math.random() - 0.5) * 0.01),
-        pickup_lng: pickupCoords?.lng ?? (businessLocation.lng + (Math.random() - 0.5) * 0.01),
+        pickup_lat: pickupCoords?.lat ?? businessLocation.lat,
+        pickup_lng: pickupCoords?.lng ?? businessLocation.lng,
         dropoff_address: dropoffAddress,
         dropoff_phone: dropoffPhone,
         note: deliveryNote || null,
-        dropoff_lat: dropoffCoords?.lat ?? (businessLocation.lat + (Math.random() - 0.5) * 0.02),
-        dropoff_lng: dropoffCoords?.lng ?? (businessLocation.lng + (Math.random() - 0.5) * 0.02),
+        dropoff_lat: dropoffCoords?.lat ?? null,
+        dropoff_lng: dropoffCoords?.lng ?? null,
         estimated_duration: 15 + Math.floor(Math.random() * 20),
         actual_duration: null,
         price: deliveryPrice,
@@ -691,6 +776,11 @@ export default function BusinessDashboardPage() {
         picked_up_at: null,
         completed_at: null,
       });
+
+      if (requireOtpOnCreate) {
+        await deliveryService.setDeliveryOtp(created.id, createOtpValue);
+        otpSetOnCreate = true;
+      }
 
       try {
         await deliveryService.dispatchDelivery(created.id, preferredRiderUserId);
@@ -709,10 +799,12 @@ export default function BusinessDashboardPage() {
       setDropoffCoords(null);
       setPinMode('dropoff');
       setSelectedRiderId(null);
+      setRequireOtpOnCreate(false);
+      setCreateOtpValue('');
       setSuccessMsg(
         dispatchConfirmed
-          ? `Livraison creee (${paymentMethod === 'pack' ? `Pack ${deliveryPrice} MAD` : paymentMethod === 'wallet' ? `Wallet+ ${deliveryPrice} MAD` : `Pay on Use ${deliveryPrice} MAD`}) et dispatch envoyee au rider.`
-          : `Livraison creee (${paymentMethod === 'pack' ? `Pack ${deliveryPrice} MAD` : paymentMethod === 'wallet' ? `Wallet+ ${deliveryPrice} MAD` : `Pay on Use ${deliveryPrice} MAD`}). Aucun rider disponible maintenant, utilisez Track > Dispatch.`
+          ? `Livraison creee (${paymentMethod === 'pack' ? `Pack ${deliveryPrice} MAD` : paymentMethod === 'wallet' ? `Wallet+ ${deliveryPrice} MAD` : `Pay on Use ${deliveryPrice} MAD`}) et dispatch envoyee au rider.${otpSetOnCreate ? ' OTP active (4 chiffres).' : ''}`
+          : `Livraison creee (${paymentMethod === 'pack' ? `Pack ${deliveryPrice} MAD` : paymentMethod === 'wallet' ? `Wallet+ ${deliveryPrice} MAD` : `Pay on Use ${deliveryPrice} MAD`}). Aucun rider disponible maintenant, utilisez Track > Dispatch.${otpSetOnCreate ? ' OTP active (4 chiffres).' : ''}`
       );
       setTimeout(() => setSuccessMsg(''), 4000);
       setSidebarTab('track');
@@ -738,9 +830,12 @@ export default function BusinessDashboardPage() {
   };
 
   const handleOpenOtpModal = (deliveryId: string) => {
+    // Set all OTP state synchronously to avoid state races
     setOtpDeliveryId(deliveryId);
     setOtpValue('');
     setOtpError('');
+    setOtpSubmitting(false);
+    setMobilePanelOpen(false);
     setOtpModalOpen(true);
   };
 
@@ -754,13 +849,18 @@ export default function BusinessDashboardPage() {
     setOtpError('');
     try {
       const res = await deliveryService.setDeliveryOtp(otpDeliveryId, otpValue);
-      if (res?.expires_at) {
+      if (res.expires_at) {
         setSuccessMsg(`OTP set. Expires at ${new Date(res.expires_at).toLocaleTimeString()}`);
         setTimeout(() => setSuccessMsg(''), 4000);
       }
       setOtpModalOpen(false);
     } catch (err) {
-      setOtpError(err instanceof Error ? err.message : 'Failed to set OTP');
+      const msg = err instanceof Error ? err.message : 'Failed to set OTP';
+      if (msg.toLowerCase().includes('otp backend')) {
+        setOtpError('OTP backend is not deployed. Ask admin to apply latest Supabase migrations.');
+      } else {
+        setOtpError(msg);
+      }
     } finally {
       setOtpSubmitting(false);
     }
@@ -821,6 +921,7 @@ export default function BusinessDashboardPage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-background">
       {/* Sticky Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-white/90 backdrop-blur-lg flex items-center justify-between px-6 h-15">
@@ -861,7 +962,7 @@ export default function BusinessDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] h-[calc(100vh-60px)] overflow-hidden">
 
         {/* LEFT: Map Section */}
-        <div className="relative p-5 lg:p-6 flex flex-col gap-4 overflow-hidden">
+        <div className="relative p-3 sm:p-5 lg:p-6 flex flex-col gap-3 lg:gap-4 overflow-hidden">
 
           {/* Stats Grid */}
           <div className="grid grid-cols-3 gap-3 lg:gap-4 flex-shrink-0">
@@ -890,7 +991,7 @@ export default function BusinessDashboardPage() {
             <div className="flex gap-2">
               {[
                 { color: 'bg-sky-400', label: 'Votre adresse' },
-                { color: 'bg-emerald-500', label: `${ridersForMap.length} nearby rider${ridersForMap.length !== 1 ? 's' : ''}` },
+                { color: 'bg-emerald-500', label: `${ridersForMap.length} rider${ridersForMap.length !== 1 ? 's' : ''} visible` },
               ].map(l => (
                 <div key={l.label} className="flex items-center gap-2 bg-white border border-border rounded-full px-3 py-1 text-xs text-foreground whitespace-nowrap">
                   <div className={`w-1.5 h-1.5 rounded-full ${l.color}`} />
@@ -918,6 +1019,7 @@ export default function BusinessDashboardPage() {
                 pickupPin={pickupCoords}
                 dropoffPin={dropoffCoords}
                 onMapPin={handleMapPin}
+                onRoutePreview={setRoutePreview}
                 className="w-full h-full rounded-2xl"
                 fallback={(
                   <BusinessMap
@@ -970,8 +1072,45 @@ export default function BusinessDashboardPage() {
           {/* Tracking is in dedicated Track tab */}
         </div>
 
-        {/* RIGHT: Sidebar with Tabs (hidden on mobile) */}
-        <div className="hidden lg:flex flex-col bg-white border-l border-border overflow-hidden">
+        {/* Mobile FAB to open sidebar */}
+        <button
+          type="button"
+          onClick={() => setMobilePanelOpen(true)}
+          className="lg:hidden fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-sky-500 text-white shadow-lg flex items-center justify-center hover:bg-sky-600 active:scale-95 transition-all"
+          aria-label="Open panel"
+        >
+          <Menu size={24} />
+        </button>
+
+        {/* Mobile overlay backdrop */}
+        {mobilePanelOpen && !otpModalOpen && (
+          <div
+            className="lg:hidden fixed inset-0 z-40 bg-black/40"
+            onClick={() => setMobilePanelOpen(false)}
+          />
+        )}
+
+        {/* RIGHT: Sidebar — full overlay on mobile, normal sidebar on desktop */}
+        <div className={`
+          fixed inset-x-0 bottom-0 z-50 max-h-[85vh] rounded-t-2xl shadow-2xl
+          lg:static lg:inset-auto lg:max-h-none lg:rounded-none lg:shadow-none lg:z-auto
+          flex flex-col bg-white border-l border-border overflow-hidden
+          transition-transform duration-300 ease-out
+          ${mobilePanelOpen ? 'translate-y-0' : 'translate-y-full'}
+          lg:translate-y-0
+        `}>
+
+          {/* Mobile drag handle + close */}
+          <div className="lg:hidden flex items-center justify-between px-4 pt-3 pb-1 flex-shrink-0">
+            <div className="w-10 h-1 rounded-full bg-gray-300 mx-auto" />
+            <button
+              type="button"
+              onClick={() => setMobilePanelOpen(false)}
+              className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+            >
+              <X size={20} />
+            </button>
+          </div>
 
           {/* Tab Navigation */}
           <div className="flex border-b border-border flex-shrink-0 overflow-x-auto">
@@ -1082,6 +1221,7 @@ export default function BusinessDashboardPage() {
                         onClick={() => {
                           setPickupCoords(null);
                           setDropoffCoords(null);
+                          setRoutePreview(null);
                         }}
                       >
                         Clear pins
@@ -1096,27 +1236,43 @@ export default function BusinessDashboardPage() {
                         {dropoffCoords && <p>Dropoff: {dropoffCoords.lat.toFixed(5)}, {dropoffCoords.lng.toFixed(5)}</p>}
                       </div>
                     )}
+                    {routePreview && (
+                      <div className="rounded-md bg-indigo-50 border border-indigo-200 px-2.5 py-1.5 text-xs text-indigo-700 flex items-center gap-2">
+                        <MapPin size={12} />
+                        <span>
+                          {routePreview.distance_m >= 1000
+                            ? `${(routePreview.distance_m / 1000).toFixed(1)} km`
+                            : `${Math.round(routePreview.distance_m)} m`}
+                          {' · '}
+                          {Math.ceil(routePreview.duration_s / 60)} min
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div>
                     <Label htmlFor="pickup" className="text-xs text-muted-foreground">Adresse de départ</Label>
-                    <Input
+                    <AddressAutocomplete
                       id="pickup"
                       value={pickupAddress}
-                      onChange={(e) => setPickupAddress(e.target.value)}
-                      placeholder="Pickup address (optional)"
-                      className="mt-1 text-sm"
+                      onChange={(address, coords) => {
+                        setPickupAddress(address);
+                        if (coords) setPickupCoords(coords);
+                      }}
+                      placeholder="Search pickup address (optional)"
                     />
                   </div>
 
                   <div>
                     <Label htmlFor="dropoff" className="text-xs text-muted-foreground">Adresse de livraison</Label>
-                    <Input
+                    <AddressAutocomplete
                       id="dropoff"
                       value={dropoffAddress}
-                      onChange={(e) => setDropoffAddress(e.target.value)}
-                      placeholder="Enter dropoff address"
-                      className="mt-1 text-sm"
+                      onChange={(address, coords) => {
+                        setDropoffAddress(address);
+                        if (coords) setDropoffCoords(coords);
+                      }}
+                      placeholder="Search dropoff address"
                       required
                     />
                   </div>
@@ -1142,6 +1298,45 @@ export default function BusinessDashboardPage() {
                       placeholder="Notes for rider"
                       className="mt-1 text-sm"
                     />
+                  </div>
+
+                  <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="require-otp-on-create" className="text-xs font-semibold text-foreground">
+                        Require OTP validation
+                      </Label>
+                      <input
+                        id="require-otp-on-create"
+                        type="checkbox"
+                        checked={requireOtpOnCreate}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          setRequireOtpOnCreate(checked);
+                          if (!checked) {
+                            setCreateOtpValue('');
+                          }
+                        }}
+                        className="h-4 w-4 accent-sky-500"
+                      />
+                    </div>
+                    {requireOtpOnCreate && (
+                      <div>
+                        <Label htmlFor="create-otp" className="text-xs text-muted-foreground">OTP (4 digits)</Label>
+                        <Input
+                          id="create-otp"
+                          value={createOtpValue}
+                          onChange={(event) => setCreateOtpValue(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="1234"
+                          maxLength={4}
+                          inputMode="numeric"
+                          className="mt-1 text-sm"
+                          required
+                        />
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      If enabled, rider must validate delivery with OTP. Photo completion is disabled for that delivery.
+                    </p>
                   </div>
 
                   <div className="rounded-md border border-border bg-background px-3 py-2 space-y-2">
@@ -1279,11 +1474,21 @@ export default function BusinessDashboardPage() {
 
                           <div className="flex items-center gap-2">
                             {canSetOtp && (
-                              <Button size="sm" variant="outline" onClick={() => handleOpenOtpModal(d.id)}>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  handleOpenOtpModal(d.id);
+                                }}
+                              >
                                 Set OTP
                               </Button>
                             )}
                             <Button
+                              type="button"
                               size="sm"
                               variant="outline"
                               disabled={!canDispatch || dispatchingDeliveryId === d.id || isOffered}
@@ -1292,7 +1497,12 @@ export default function BusinessDashboardPage() {
                               {isOffered ? 'Searching…' : 'Dispatch'}
                             </Button>
                             {isDelivered && podMethod === 'photo' && podPhoto && (
-                              <Button size="sm" variant="outline" onClick={() => handleViewPodPhoto(d.id, podPhoto)}>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleViewPodPhoto(d.id, podPhoto)}
+                              >
                                 View Photo
                               </Button>
                             )}
@@ -1404,30 +1614,39 @@ export default function BusinessDashboardPage() {
           </div>
         </div>
       </div>
+    </div>
 
-      <Dialog open={otpModalOpen} onOpenChange={setOtpModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Set Delivery OTP</DialogTitle>
-            <DialogDescription>Enter a 4-digit OTP for this delivery.</DialogDescription>
-          </DialogHeader>
+    {/* OTP Modal - Rendered outside main grid to ensure visibility */}
+    {otpModalOpen && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4" onClick={() => setOtpModalOpen(false)}>
+        <div
+          className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div>
+            <h3 className="text-lg font-semibold">Set Delivery OTP</h3>
+            <p className="text-sm text-muted-foreground">Enter a 4-digit OTP code. The rider will need this to confirm delivery.</p>
+          </div>
           <div className="space-y-3">
             <Input
+              autoFocus
               value={otpValue}
               onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
               placeholder="1234"
               maxLength={4}
               inputMode="numeric"
+              className="text-center text-2xl tracking-[0.5em] font-bold"
             />
             {otpError && <p className="text-xs text-red-500">{otpError}</p>}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOtpModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSetOtp} disabled={otpSubmitting}>Save OTP</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="outline" onClick={() => setOtpModalOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={handleSetOtp} disabled={otpSubmitting}>Save OTP</Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

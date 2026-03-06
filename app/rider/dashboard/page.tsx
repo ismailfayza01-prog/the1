@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { userService, riderService, deliveryService } from '@/lib/storage';
+import { userService, riderService, deliveryService, pushSubscriptionService } from '@/lib/storage';
 import { createClient } from '@/lib/supabase/client';
 import {
   getRiderCommission,
@@ -41,6 +41,7 @@ import { haversineMeters } from '@/lib/geo';
 
 const MAP_BOUNDS = { latMin: 35.74, latMax: 35.79, lngMin: -5.86, lngMax: -5.8 };
 const ROUTING_ENABLED = process.env.NEXT_PUBLIC_ROUTING_ENABLED !== 'false';
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
 const ROUTE_REQUEST_DEBOUNCE_MS = 10_000;
 const ROUTE_RECALC_DISTANCE_M = 150;
 const MISSING_RIDER_PROFILE_MESSAGE = 'Rider profile not found. Ask admin to provision your rider account or apply the latest Supabase migration.';
@@ -76,6 +77,26 @@ function getNavigationStage(status: Delivery['status']): NavigationStage {
   return 'pickup';
 }
 
+function deliveryHasActiveOtp(delivery: Delivery | null | undefined): boolean {
+  if (!delivery) return false;
+  if (delivery.pod_method === 'otp' || delivery.otp_verified) return true;
+  if (delivery.otp_expires_at) {
+    return new Date(delivery.otp_expires_at) >= new Date(); // OTP still active
+  }
+  return false;
+}
+
+function deliveryHasExpiredOtp(delivery: Delivery | null | undefined): boolean {
+  if (!delivery || !delivery.otp_expires_at) return false;
+  if (delivery.otp_verified || delivery.pod_method === 'otp') return false; // already verified
+  return new Date(delivery.otp_expires_at) < new Date();
+}
+
+function deliveryHadOtpSet(delivery: Delivery | null | undefined): boolean {
+  if (!delivery) return false;
+  return Boolean(delivery.otp_expires_at || delivery.otp_verified);
+}
+
 function buildExternalNavLinks(origin: LatLng, destination: LatLng): { google_maps: string; waze: string } {
   const originStr = `${origin.lat},${origin.lng}`;
   const destinationStr = `${destination.lat},${destination.lng}`;
@@ -84,6 +105,17 @@ function buildExternalNavLinks(origin: LatLng, destination: LatLng): { google_ma
     google_maps: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destinationStr)}&travelmode=driving`,
     waze: `https://www.waze.com/ul?ll=${encodeURIComponent(destinationStr)}&navigate=yes`,
   };
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(new ArrayBuffer(rawData.length));
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
 function seedLocation(id: string): { lat: number; lng: number } {
@@ -342,10 +374,72 @@ export default function RiderDashboardPage() {
   const assignedSnapshotRef = useRef<string | null>(null);
   const hydratedNoticeRef = useRef(false);
   const navigationRequestRef = useRef<NavigationRequestSnapshot | null>(null);
+  const riderRef = useRef<Rider | null>(null);
+  const liveLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const statusTokenRef = useRef('');
+  const pushSyncDoneRef = useRef(false);
+
+  useEffect(() => {
+    riderRef.current = rider;
+  }, [rider]);
+
+  useEffect(() => {
+    liveLocationRef.current = liveRiderLocation;
+  }, [liveRiderLocation]);
+
+  useEffect(() => {
+    statusTokenRef.current = statusAccessToken;
+  }, [statusAccessToken]);
+
+  const registerPushSubscription = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+    if (!VAPID_PUBLIC_KEY) return;
+
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      await navigator.serviceWorker.ready;
+
+      const permission = Notification.permission === 'granted'
+        ? 'granted'
+        : await Notification.requestPermission();
+      if (permission !== 'granted') return;
+
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as unknown as BufferSource;
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
+      }
+
+      await pushSubscriptionService.upsert(subscription.toJSON());
+    } catch (error) {
+      console.error('Push subscription registration failed', error);
+    }
+  }, []);
+
+  const sendPresenceBeacon = useCallback((location: { lat: number; lng: number } | null) => {
+    if (typeof window === 'undefined' || typeof navigator.sendBeacon !== 'function') return;
+
+    const payload = new URLSearchParams();
+    if (location) {
+      payload.set('lat', String(location.lat));
+      payload.set('lng', String(location.lng));
+    }
+
+    const token = statusTokenRef.current;
+    if (token) {
+      payload.set('access_token', token);
+    }
+
+    navigator.sendBeacon('/api/rider/beacon', payload);
+  }, []);
 
   const refreshRiderData = async (riderId: string, userId: string) => {
     setDeliveries(await deliveryService.getByRiderId(riderId));
-    setPendingDeliveries((await deliveryService.getActive()).filter((d) => d.status === 'pending' && !d.rider_id));
+    setPendingDeliveries(await deliveryService.getPendingUnassigned());
     setOffers(await deliveryService.getMyOffers());
     setAccessError('');
     let riderFresh = await riderService.getByUserId(userId);
@@ -402,6 +496,8 @@ export default function RiderDashboardPage() {
     let pollInterval: ReturnType<typeof setInterval> | null = null;
     let userId: string | null = null;
     let riderId: string | null = null;
+    let handleVisibilityChange: (() => void) | null = null;
+    let handleBeforeUnload: (() => void) | null = null;
 
     async function init() {
       setInitializing(true);
@@ -518,29 +614,54 @@ export default function RiderDashboardPage() {
           }
         }, 15000);
 
-        // Polling fallback in case realtime drops.
+        // Safety-net poll every 30s in case realtime drops
         pollInterval = setInterval(async () => {
           if (!riderId || !userId) return;
           await refreshRiderData(riderId, userId);
-        }, 8000);
+        }, 30000);
+
+        handleVisibilityChange = () => {
+          if (!riderId || !userId) return;
+          const currentRider = riderRef.current;
+          if (!currentRider || currentRider.status === 'offline') return;
+
+          if (document.visibilityState === 'hidden') {
+            void sendPresenceHeartbeat();
+            sendPresenceBeacon(liveLocationRef.current);
+            return;
+          }
+
+          if (document.visibilityState === 'visible') {
+            void sendPresenceHeartbeat();
+            void refreshRiderData(riderId, userId);
+          }
+        };
+
+        handleBeforeUnload = () => {
+          const currentRider = riderRef.current;
+          if (!currentRider || currentRider.status === 'offline') return;
+          sendPresenceBeacon(liveLocationRef.current);
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        // Debounced realtime handler to coalesce bursts
+        let realtimeDebounce: ReturnType<typeof setTimeout> | null = null;
+        const debouncedRefresh = () => {
+          if (realtimeDebounce) clearTimeout(realtimeDebounce);
+          realtimeDebounce = setTimeout(async () => {
+            if (riderId && userId) {
+              await refreshRiderData(riderId, userId);
+            }
+          }, 500);
+        };
 
         // Realtime subscriptions
         channel = supabase.channel('rider-dashboard')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, async () => {
-            if (riderId && userId) {
-              await refreshRiderData(riderId, userId);
-            }
-          })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_offers' }, async () => {
-            if (riderId && userId) {
-              await refreshRiderData(riderId, userId);
-            }
-          })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, async () => {
-            if (riderId && userId) {
-              await refreshRiderData(riderId, userId);
-            }
-          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, debouncedRefresh)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_offers' }, debouncedRefresh)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, debouncedRefresh)
           .subscribe();
       } catch (error) {
         console.error('Rider dashboard init failed', error);
@@ -554,14 +675,27 @@ export default function RiderDashboardPage() {
     return () => {
       if (locationInterval) clearInterval(locationInterval);
       if (pollInterval) clearInterval(pollInterval);
+      if (handleVisibilityChange) {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      if (handleBeforeUnload) {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      }
       if (channel) supabase.removeChannel(channel);
     };
-  }, [router]);
+  }, [router, sendPresenceBeacon]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!currentUser || !rider || rider.status === 'offline') return;
+    if (pushSyncDoneRef.current) return;
+    pushSyncDoneRef.current = true;
+    void registerPushSubscription();
+  }, [currentUser, rider, registerPushSubscription]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -755,6 +889,11 @@ export default function RiderDashboardPage() {
     if (rider) {
       await riderService.updateStatus(rider.id, 'offline');
     }
+    try {
+      await pushSubscriptionService.remove();
+    } catch (error) {
+      console.error('Push subscription remove failed', error);
+    }
     await userService.logout();
     router.push('/rider');
   };
@@ -872,6 +1011,7 @@ export default function RiderDashboardPage() {
     try {
       await deliveryService.verifyDeliveryOtp(deliveryId, otpInput);
       setOtpInput('');
+      setPhotoError('');
       if (rider && currentUser) {
         await refreshRiderData(rider.id, currentUser.id);
       }
@@ -881,6 +1021,8 @@ export default function RiderDashboardPage() {
         setOtpError('OTP expired. Please request a new code.');
       } else if (msg.toLowerCase().includes('invalid')) {
         setOtpError('Invalid OTP. Please try again.');
+      } else if (msg.toLowerCase().includes('otp backend')) {
+        setOtpError('OTP backend is not deployed. Ask admin to apply latest Supabase migrations.');
       } else {
         setOtpError(msg);
       }
@@ -890,6 +1032,12 @@ export default function RiderDashboardPage() {
   };
 
   const handleUploadPhoto = async (deliveryId: string, file: File) => {
+    const delivery = deliveries.find((item) => item.id === deliveryId);
+    if (deliveryHasActiveOtp(delivery)) {
+      setPhotoError('OTP is still active for this delivery. Verify OTP first.');
+      return;
+    }
+
     setPhotoUploading(true);
     setPhotoError('');
 
@@ -949,36 +1097,43 @@ export default function RiderDashboardPage() {
     const delivery = deliveries.find(d => d.id === deliveryId);
     if (!delivery) return;
 
-    // Guard: require either OTP verified or photo uploaded before completing
-    const hasProof = delivery.pod_photo_url || delivery.pod_otp_verified_at;
-    if (!hasProof) {
-      setPhotoError('Please verify OTP or upload a delivery photo before marking as delivered.');
+    const otpActive = deliveryHasActiveOtp(delivery);
+    const otpProofReady = Boolean(
+      delivery.pod_otp_verified_at ||
+      delivery.otp_verified ||
+      delivery.pod_method === 'otp'
+    );
+
+    // If OTP is active and not yet verified, block
+    if (otpActive && !otpProofReady) {
+      setOtpError('OTP is active for this delivery. Verify OTP before completing.');
       return;
     }
 
-    const actualDuration = delivery.picked_up_at
-      ? Math.round((Date.now() - new Date(delivery.picked_up_at).getTime()) / 60000)
-      : delivery.estimated_duration;
+    try {
+      // Use the direct completion RPC — handles all cases:
+      // no OTP, expired OTP, verified OTP
+      await deliveryService.completeDeliveryDirect(deliveryId);
 
-    // Respect DB guard: transition to in_transit then deliver via PoD RPC.
-    if (delivery.status === 'picked_up') {
-      await deliveryService.update(deliveryId, { status: 'in_transit' });
-    }
-    await deliveryService.submitDeliveryPhoto(deliveryId, `rider-marked-delivered-${Date.now()}`);
-    await deliveryService.update(deliveryId, {
-      completed_at: new Date().toISOString(),
-      actual_duration: actualDuration,
-    });
+      const actualDuration = delivery.picked_up_at
+        ? Math.round((Date.now() - new Date(delivery.picked_up_at).getTime()) / 60000)
+        : delivery.estimated_duration;
 
-    await riderService.update(rider.id, {
-      total_deliveries: rider.total_deliveries + 1,
-      earnings_this_month: rider.earnings_this_month + delivery.rider_commission,
-      status: 'available',
-      last_seen_at: new Date().toISOString(),
-    });
+      await deliveryService.update(deliveryId, { actual_duration: actualDuration });
 
-    if (currentUser) {
-      await refreshRiderData(rider.id, currentUser.id);
+      await riderService.update(rider.id, {
+        total_deliveries: rider.total_deliveries + 1,
+        earnings_this_month: rider.earnings_this_month + delivery.rider_commission,
+        status: 'available',
+        last_seen_at: new Date().toISOString(),
+      });
+
+      if (currentUser) {
+        await refreshRiderData(rider.id, currentUser.id);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to complete delivery';
+      setPhotoError(msg);
     }
   };
 
@@ -1049,6 +1204,9 @@ export default function RiderDashboardPage() {
   }
 
   const activeDelivery = deliveries.find(d => ['accepted', 'picked_up', 'in_transit'].includes(d.status));
+  const activeOtpActive = deliveryHasActiveOtp(activeDelivery);
+  const activeOtpExpired = deliveryHasExpiredOtp(activeDelivery);
+  const activeHadOtp = deliveryHadOtpSet(activeDelivery);
   const assignedPendingDelivery = deliveries.find(d => d.status === 'pending');
   const completedDeliveries = deliveries.filter(d => d.status === 'delivered');
   const monthStart = new Date();
@@ -1450,16 +1608,7 @@ export default function RiderDashboardPage() {
                     Arrived at pickup
                   </Button>
                 )}
-                {activeDelivery.status === 'picked_up' && (
-                  <Button
-                    className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-md shadow-emerald-200"
-                    onClick={() => handleMarkDelivered(activeDelivery.id)}
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Mark Delivered
-                  </Button>
-                )}
-                {activeDelivery.status === 'in_transit' && (
+                {(activeDelivery.status === 'picked_up' || activeDelivery.status === 'in_transit') && (
                   <Button
                     className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-md shadow-emerald-200"
                     onClick={() => handleMarkDelivered(activeDelivery.id)}
@@ -1470,44 +1619,58 @@ export default function RiderDashboardPage() {
                 )}
               </div>
 
-              {['accepted', 'picked_up', 'in_transit'].includes(activeDelivery.status) && (
+              {['accepted', 'picked_up', 'in_transit'].includes(activeDelivery.status) && activeHadOtp && (
                 <div className="mt-5 space-y-4 rounded-xl border border-slate-100 bg-slate-50 p-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Proof of Delivery</div>
 
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">OTP (4 digits)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={otpInput}
-                        onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        placeholder="1234"
-                        maxLength={4}
-                        inputMode="numeric"
-                      />
-                      <Button
-                        className="h-10"
-                        onClick={() => handleVerifyOtp(activeDelivery.id)}
-                        disabled={otpSubmitting}
-                      >
-                        Verify
-                      </Button>
+                  {/* OTP section — show when OTP was set (active or expired) */}
+                  {activeHadOtp && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">OTP (4 digits)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={otpInput}
+                          onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="1234"
+                          maxLength={4}
+                          inputMode="numeric"
+                          disabled={activeOtpExpired}
+                        />
+                        <Button
+                          className="h-10"
+                          onClick={() => handleVerifyOtp(activeDelivery.id)}
+                          disabled={otpSubmitting || activeOtpExpired}
+                        >
+                          Verify
+                        </Button>
+                      </div>
+                      {activeOtpExpired && (
+                        <p className="text-[11px] text-amber-600 font-medium">OTP expired — use photo below instead.</p>
+                      )}
+                      {!activeOtpExpired && (
+                        <p className="text-[11px] text-muted-foreground">Enter the 4-digit code from the business.</p>
+                      )}
+                      {otpError && <p className="text-xs text-red-500">{otpError}</p>}
                     </div>
-                    {otpError && <p className="text-xs text-red-500">{otpError}</p>}
-                  </div>
+                  )}
 
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Photo</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      disabled={photoUploading}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleUploadPhoto(activeDelivery.id, file);
-                      }}
-                    />
-                    {photoError && <p className="text-xs text-red-500">{photoError}</p>}
-                  </div>
+                  {/* Photo section — show when no OTP, or when OTP expired */}
+                  {(!activeHadOtp || activeOtpExpired) && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Photo</Label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        disabled={photoUploading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadPhoto(activeDelivery.id, file);
+                        }}
+                      />
+                      <p className="text-[11px] text-muted-foreground">Upload a delivery photo to complete.</p>
+                      {photoError && <p className="text-xs text-red-500">{photoError}</p>}
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
