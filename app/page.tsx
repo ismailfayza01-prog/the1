@@ -50,7 +50,6 @@ type PricingContent = {
   packsTitle: string;
   packs: PricingPackItem[];
   walletTierNote: string;
-  capacityNote: string;
 };
 
 type HomeCopy = {
@@ -90,9 +89,9 @@ type HomeCopy = {
   navFaq: string;
   heroHeadline: string;
   heroSubheadline: string;
-  heroStats: Array<{ value: string; label: string }>;
+  heroValueProps: Array<{ label: string }>;
   trustTitle: string;
-  trustStats: Array<{ value: string; label: string }>;
+  trustPillars: Array<{ label: string }>;
   howItWorksTitle: string;
   howItWorksSteps: Array<{ title: string; desc: string }>;
   ctaTitle: string;
@@ -108,36 +107,36 @@ type HomeCopy = {
 
 const HOME_COPY: Record<AppLanguage, HomeCopy> = {
   en: {
-    heroBadge: 'B2B Courier Platform - Tangier, Morocco',
-    getStarted: 'Get Started',
-    viewPortals: 'View Portals',
+    heroBadge: 'B2B Courier Platform — Tangier, Morocco',
+    getStarted: 'Request a Demo',
+    viewPortals: 'See How It Works',
     features: [
-      { title: 'Real-Time GPS Tracking', desc: 'See available riders live on the map and track every delivery from pickup to drop-off.' },
-      { title: 'Flexible Pricing', desc: 'Pay on use at 30 MAD, prepaid packs at 25 MAD, and wallet top-ups that can go down to 18 MAD per ride.' },
-      { title: 'Progressive Earnings', desc: 'Riders earn more with every delivery through our tiered commission system.' },
-      { title: 'Live Tracking', desc: 'Follow every delivery from pickup to drop with real-time map updates.' },
+      { title: 'Know where your rider is. Always.', desc: 'Open your dashboard, see every active rider on the map. No more calling to ask "where are you?" — just check the live view.' },
+      { title: 'Pay only for what you use', desc: 'Start at 30 MAD per delivery with no commitment. As your volume grows, unlock rates down to 18 MAD with Wallet+.' },
+      { title: 'Riders earn more, you get better service', desc: 'Our progressive commission rewards riders who deliver more — so you always get motivated, experienced professionals.' },
+      { title: 'From request to proof of delivery', desc: 'Create a delivery, watch it move through pickup, transit, and drop-off. Get OTP or photo confirmation when it arrives.' },
     ],
-    aboutLabel: 'About The 1000',
-    aboutTitle: "Tangier's B2B Courier Marketplace",
+    aboutLabel: 'Why The 1000',
+    aboutTitle: 'Your deliveries, under control',
     aboutBody:
-      'The 1000 is a B2B courier marketplace platform based in Tangier, Morocco. It connects businesses that need same-day and express deliveries with a network of professional riders, offering real-time GPS tracking, subscription-based pricing, and a centralized dashboard for managing every delivery from request to drop-off.',
+      'The 1000 is a courier platform built for Tangier businesses. Request a delivery, get matched with a professional rider, and track every step on a live map — from pickup to proof of delivery. No subscriptions required, no minimum volume.',
     portalsLabel: 'Portals',
-    portalsTitle: 'Select Your Portal',
-    portalsDescription: 'Choose the application that matches your role in The 1000 platform.',
+    portalsTitle: 'Choose Your Portal',
+    portalsDescription: 'Each portal is designed for a specific role on the platform.',
     apps: [
       {
         title: 'Admin Dashboard',
-        description: 'Manage riders, businesses, and monitor all deliveries in real time across the platform.',
+        description: 'Monitor every rider and delivery across Tangier, manage businesses, and handle escalations.',
         badge: 'Platform Control',
       },
       {
         title: 'Business Portal',
-        description: 'Request deliveries, track riders, and manage your subscription with ease.',
+        description: 'Create deliveries, track riders in real time, and see your complete delivery history — all from one screen.',
         badge: 'For Businesses',
       },
       {
         title: 'Rider App',
-        description: 'Accept deliveries, track earnings, and grow your income with every ride.',
+        description: 'See incoming delivery offers, navigate to pickups, and track your earnings as they grow.',
         badge: 'For Riders',
       },
     ],
@@ -155,59 +154,44 @@ const HOME_COPY: Record<AppLanguage, HomeCopy> = {
     hiddenCredentialsNote: 'Note: These accounts are reset regularly for security.',
     faqLabel: 'FAQ',
     faqTitle: 'Frequently Asked Questions',
-    faqSubtitle: 'Everything you need to know about The 1000 courier platform.',
+    faqSubtitle: 'Common questions about using The 1000 for your deliveries.',
     faqAriaLabel: 'Frequently Asked Questions',
-    footer: 'B2B Courier Marketplace, Tangier, Morocco',
+    footer: 'B2B Courier Platform, Tangier, Morocco',
     faqs: [
       {
         question: 'What is The 1000?',
         answer:
-          'The 1000 is a B2B courier marketplace platform based in Tangier, Morocco. It connects businesses that need same-day and express deliveries with a network of professional riders, offering real-time GPS tracking, subscription-based pricing, and a centralized dashboard for managing every delivery.',
+          'A courier platform for Tangier businesses. You request a delivery, we match you with a professional rider, and you track everything live on a map until it arrives.',
       },
       {
-        question: 'How does The 1000 work for businesses in Tangier?',
+        question: 'How does it work?',
         answer:
-          'Businesses subscribe to The 1000 and request deliveries through a dedicated business portal. The platform instantly matches each request to an available rider in Tangier. Businesses track their rider live on a map from pickup to drop-off and receive full delivery history through their dashboard.',
+          'Open the business portal, set your pickup and drop-off, and submit. A nearby rider accepts within minutes. You watch the whole thing happen on the map.',
       },
       {
-        question: 'What areas does The 1000 currently serve?',
+        question: 'What areas do you cover?',
         answer:
-          'The 1000 currently operates in Tangier, Morocco, providing same-day and express B2B courier services across the city. Coverage expansion to other cities in the Tanger-Tetouan-Al Hoceima region is planned.',
+          'We currently operate across Tangier. Expansion to the Tanger-Tetouan-Al Hoceima region is planned.',
       },
       {
-        question: 'What types of deliveries does The 1000 handle?',
+        question: 'What can I send?',
         answer:
-          'The 1000 specializes in B2B deliveries including documents, parcels, and inter-business shipments within Tangier. The platform is designed for businesses such as pharmacies, retailers, suppliers, and service firms that require reliable, trackable same-day delivery.',
+          'Documents, parcels, and inter-business shipments. We work with pharmacies, retailers, suppliers, and service companies that need same-day delivery within Tangier.',
       },
       {
-        question: 'What pricing options are available?',
+        question: 'How much does it cost?',
         answer:
-          'The 1000 uses a 3-level model: Pay on Use at 30 MAD per ride, Pack Credits at 25 MAD per ride, and Wallet+ rates that can go down to 18 MAD per ride as top-up volume increases.',
+          '30 MAD per delivery with pay-as-you-go. Buy a credit pack at 25 MAD per delivery, or use Wallet+ to unlock rates as low as 18 MAD. No subscriptions, no hidden fees.',
       },
       {
-        question: 'Does The 1000 offer real-time delivery tracking?',
+        question: 'Can I track my delivery in real time?',
         answer:
-          'Yes. Every delivery on The 1000 includes live GPS tracking. Businesses see their assigned rider moving on an interactive map in real time, from the moment a delivery is accepted until it is marked as delivered.',
+          'Yes. Every delivery includes live GPS tracking. You see your rider moving on the map from the moment they accept until they deliver.',
       },
       {
-        question: 'How do riders join The 1000?',
+        question: 'How do riders join?',
         answer:
-          'Riders sign up through the dedicated Rider Portal on The 1000 platform. Once onboarded, they set their availability, accept nearby delivery requests, and track their earnings in real time. The platform uses a progressive commission model that rewards higher delivery volume.',
-      },
-      {
-        question: 'What credit packs are available?',
-        answer:
-          'Current pack options are Starter 8 (200 MAD, 30 days), Trimestrial 24 (600 MAD, 90 days), Semestrial 48 (1200 MAD, 180 days), and Annual 96 (2400 MAD, 365 days).',
-      },
-      {
-        question: 'How does Wallet+ reach 18 MAD per ride?',
-        answer:
-          'Wallet+ uses top-up tiers: 25 MAD for top-ups below 1500 MAD, 22 MAD for 1500-2999 MAD, 20 MAD for 3000-4999 MAD, and 18 MAD when top-up is 5000 MAD or more.',
-      },
-      {
-        question: 'What happens if rider capacity is full at launch?',
-        answer:
-          'Launch onboarding is capacity-controlled. If active rider capacity is full, new businesses are moved to a waitlist and onboarded in batches to protect delivery reliability.',
+          'Riders sign up through the Rider Portal, set their availability, and start accepting nearby deliveries. They earn a progressive commission that increases with volume.',
       },
     ],
     navFeatures: 'Features',
@@ -215,29 +199,29 @@ const HOME_COPY: Record<AppLanguage, HomeCopy> = {
     navPricing: 'Pricing',
     navPortals: 'Portals',
     navFaq: 'FAQ',
-    heroHeadline: 'Deliver Faster Across Tangier',
-    heroSubheadline: 'The B2B courier marketplace that connects businesses with professional riders for same-day delivery, real-time tracking, and seamless logistics.',
-    heroStats: [
-      { value: '500+', label: 'Deliveries' },
-      { value: '50+', label: 'Riders' },
-      { value: '98%', label: 'On-Time' },
+    heroHeadline: 'Stop Chasing Riders. Start Tracking Deliveries.',
+    heroSubheadline: 'The 1000 gives Tangier businesses a single dashboard to request, assign, and track same-day deliveries with professional riders — no more WhatsApp juggling.',
+    heroValueProps: [
+      { label: 'Same-Day Delivery' },
+      { label: 'Live GPS Tracking' },
+      { label: 'Proof of Delivery' },
     ],
-    trustTitle: 'Trusted by businesses across Tangier',
-    trustStats: [
-      { value: '500+', label: 'Deliveries Completed' },
-      { value: '50+', label: 'Active Riders' },
-      { value: '98%', label: 'On-Time Rate' },
-      { value: '4.8', label: 'Average Rating' },
+    trustTitle: 'Trusted by pharmacies, retailers, and suppliers across Tangier',
+    trustPillars: [
+      { label: 'Same-Day Delivery' },
+      { label: 'Live GPS Tracking' },
+      { label: 'Professional Riders' },
+      { label: 'Proof of Delivery' },
     ],
     howItWorksTitle: 'How It Works',
     howItWorksSteps: [
-      { title: 'Request a Delivery', desc: 'Submit your delivery details through the business portal in seconds.' },
-      { title: 'Rider Assigned', desc: 'Our system instantly matches your request with the nearest available rider.' },
-      { title: 'Track & Receive', desc: 'Follow your delivery in real time on the map until it reaches its destination.' },
+      { title: 'Drop a pin, describe your package', desc: 'Open the business portal, set your pickup and drop-off locations, and add delivery details. Takes about 30 seconds.' },
+      { title: 'We find the nearest rider', desc: 'The platform instantly offers the job to available riders nearby. Someone accepts within minutes.' },
+      { title: 'Watch it happen live', desc: 'Track your rider on the map from pickup to delivery. You get a confirmation the moment it arrives.' },
     ],
-    ctaTitle: 'Ready to streamline your deliveries?',
-    ctaSubtitle: 'Join businesses in Tangier already using The 1000 for reliable, tracked B2B courier services.',
-    ctaButton: 'Get Started Now',
+    ctaTitle: 'Your first delivery is 30 minutes away',
+    ctaSubtitle: 'Create your business account, request a delivery, and watch it happen live on the map.',
+    ctaButton: 'Create Your Account',
     footerPlatform: 'Platform',
     footerCompany: 'Company',
     footerConnect: 'Connect',
@@ -246,36 +230,36 @@ const HOME_COPY: Record<AppLanguage, HomeCopy> = {
     footerLocation: 'Tangier, Morocco',
   },
   fr: {
-    heroBadge: 'Plateforme de livraison B2B - Tanger, Maroc',
-    getStarted: 'Commencer',
-    viewPortals: 'Voir les portails',
+    heroBadge: 'Plateforme de livraison B2B — Tanger, Maroc',
+    getStarted: 'Demander une demo',
+    viewPortals: 'Voir comment ca marche',
     features: [
-      { title: 'Suivi GPS en temps reel', desc: 'Visualisez les livreurs disponibles en direct et suivez chaque livraison du retrait a la remise.' },
-      { title: 'Tarification flexible', desc: 'Paiement a l usage a 30 MAD, packs prepayes a 25 MAD, et wallet top-up pouvant descendre jusqu a 18 MAD par course.' },
-      { title: 'Revenus progressifs', desc: 'Les livreurs gagnent plus a chaque livraison grace au systeme de commissions.' },
-      { title: 'Suivi en direct', desc: 'Suivez chaque livraison du retrait a la remise avec des mises a jour en temps reel.' },
+      { title: 'Sachez ou est votre livreur. Toujours.', desc: 'Ouvrez votre tableau de bord, voyez chaque livreur actif sur la carte. Plus besoin d appeler pour demander "ou es-tu ?" — consultez la vue en direct.' },
+      { title: 'Payez uniquement ce que vous utilisez', desc: 'Commencez a 30 MAD par livraison sans engagement. En augmentant votre volume, debloquez des tarifs jusqu a 18 MAD avec Wallet+.' },
+      { title: 'Les livreurs gagnent plus, vous avez un meilleur service', desc: 'Notre commission progressive recompense les livreurs les plus actifs — vous beneficiez toujours de professionnels motives et experimentes.' },
+      { title: 'De la demande a la preuve de livraison', desc: 'Creez une livraison, suivez-la du retrait au transit jusqu a la remise. Recevez une confirmation OTP ou photo a l arrivee.' },
     ],
-    aboutLabel: 'A propos de The 1000',
-    aboutTitle: 'La marketplace de coursiers B2B de Tanger',
+    aboutLabel: 'Pourquoi The 1000',
+    aboutTitle: 'Vos livraisons, sous controle',
     aboutBody:
-      'The 1000 est une plateforme marketplace de livraison B2B basee a Tanger, au Maroc. Elle connecte les entreprises qui ont besoin de livraisons express et le jour meme avec un reseau de livreurs professionnels, avec suivi GPS en temps reel, tarification par abonnement et tableau de bord centralise pour gerer chaque livraison.',
+      'The 1000 est une plateforme de livraison concue pour les entreprises de Tanger. Demandez une livraison, soyez mis en relation avec un livreur professionnel, et suivez chaque etape sur une carte en direct — du retrait a la preuve de livraison. Sans abonnement, sans volume minimum.',
     portalsLabel: 'Portails',
     portalsTitle: 'Choisissez votre portail',
-    portalsDescription: 'Selectionnez l application qui correspond a votre role sur la plateforme The 1000.',
+    portalsDescription: 'Chaque portail est concu pour un role specifique sur la plateforme.',
     apps: [
       {
         title: 'Tableau de bord Admin',
-        description: 'Gerez les livreurs, les entreprises et suivez toutes les livraisons en temps reel.',
+        description: 'Supervisez chaque livreur et livraison a Tanger, gerez les entreprises et traitez les incidents.',
         badge: 'Pilotage plateforme',
       },
       {
         title: 'Portail Entreprise',
-        description: 'Demandez des livraisons, suivez les livreurs et gerez votre abonnement facilement.',
+        description: 'Creez des livraisons, suivez les livreurs en temps reel et consultez votre historique complet — le tout depuis un seul ecran.',
         badge: 'Pour les entreprises',
       },
       {
         title: 'Application Livreur',
-        description: 'Acceptez des livraisons, suivez vos revenus et augmentez vos gains.',
+        description: 'Consultez les offres de livraison, naviguez vers les points de retrait et suivez vos gains au fil du temps.',
         badge: 'Pour les livreurs',
       },
     ],
@@ -293,59 +277,44 @@ const HOME_COPY: Record<AppLanguage, HomeCopy> = {
     hiddenCredentialsNote: 'Note: ces comptes sont reinitialises regulierement pour des raisons de securite.',
     faqLabel: 'FAQ',
     faqTitle: 'Questions frequentes',
-    faqSubtitle: 'Tout ce que vous devez savoir sur la plateforme The 1000.',
+    faqSubtitle: 'Les questions les plus courantes sur The 1000.',
     faqAriaLabel: 'Questions frequentes',
-    footer: 'Marketplace de coursiers B2B, Tanger, Maroc',
+    footer: 'Plateforme de livraison B2B, Tanger, Maroc',
     faqs: [
       {
-        question: 'Qu est-ce que The 1000 ?',
+        question: 'C est quoi The 1000 ?',
         answer:
-          'The 1000 est une marketplace B2B de livraison basee a Tanger. Elle relie les entreprises ayant besoin de livraisons rapides a un reseau de livreurs professionnels avec suivi GPS en temps reel et gestion centralisee.',
+          'Une plateforme de livraison pour les entreprises de Tanger. Vous demandez une livraison, on vous met en relation avec un livreur professionnel, et vous suivez tout en direct sur la carte.',
       },
       {
-        question: 'Comment fonctionne The 1000 pour les entreprises a Tanger ?',
+        question: 'Comment ca fonctionne ?',
         answer:
-          'Les entreprises s abonnent a The 1000 et lancent leurs demandes depuis le portail entreprise. La plateforme assigne instantanement un livreur disponible et permet un suivi complet sur carte jusqu a la livraison.',
+          'Ouvrez le portail entreprise, indiquez vos points de retrait et de livraison, et validez. Un livreur a proximite accepte en quelques minutes. Vous suivez tout sur la carte.',
       },
       {
-        question: 'Quelles zones sont actuellement couvertes ?',
+        question: 'Quelles zones couvrez-vous ?',
         answer:
-          'The 1000 opere actuellement a Tanger, au Maroc, avec des livraisons B2B express et le jour meme dans toute la ville. Une extension vers d autres villes de la region est prevue.',
+          'Nous operons actuellement dans toute la ville de Tanger. Une extension a la region Tanger-Tetouan-Al Hoceima est prevue.',
       },
       {
-        question: 'Quels types de livraisons sont pris en charge ?',
+        question: 'Que puis-je envoyer ?',
         answer:
-          'The 1000 traite les livraisons B2B de documents, colis et envois inter-entreprises. La plateforme convient aux pharmacies, commerces, fournisseurs et societes de services.',
+          'Documents, colis et envois inter-entreprises. Nous travaillons avec des pharmacies, commerces, fournisseurs et societes de services qui ont besoin de livraisons le jour meme a Tanger.',
       },
       {
-        question: 'Quelles options de prix sont disponibles ?',
+        question: 'Combien ca coute ?',
         answer:
-          'The 1000 applique un modele a 3 niveaux: Pay on Use a 30 MAD par course, Pack Credits a 25 MAD par course, et Wallet+ avec un tarif pouvant descendre jusqu a 18 MAD par course selon le top-up.',
+          '30 MAD par livraison en paiement a l usage. Achetez un pack credits a 25 MAD par livraison, ou utilisez Wallet+ pour debloquer des tarifs des 18 MAD. Sans abonnement, sans frais caches.',
       },
       {
-        question: 'Y a-t-il un suivi en temps reel des livraisons ?',
+        question: 'Puis-je suivre ma livraison en temps reel ?',
         answer:
-          'Oui. Chaque livraison inclut un suivi GPS en direct. Les entreprises visualisent le deplacement du livreur depuis la prise en charge jusqu a la remise.',
+          'Oui. Chaque livraison inclut le suivi GPS en direct. Vous voyez votre livreur se deplacer sur la carte depuis l acceptation jusqu a la livraison.',
       },
       {
-        question: 'Comment les livreurs rejoignent-ils The 1000 ?',
+        question: 'Comment les livreurs rejoignent The 1000 ?',
         answer:
-          'Les livreurs s inscrivent via le portail livreur. Une fois actives, ils definissent leur disponibilite, acceptent des courses proches et suivent leurs revenus en temps reel.',
-      },
-      {
-        question: 'Quels packs credits sont proposes ?',
-        answer:
-          'Les packs disponibles sont: Starter 8 (200 MAD, 30 jours), Trimestrial 24 (600 MAD, 90 jours), Semestrial 48 (1200 MAD, 180 jours), et Annual 96 (2400 MAD, 365 jours).',
-      },
-      {
-        question: 'Comment Wallet+ atteint 18 MAD par course ?',
-        answer:
-          'Wallet+ fonctionne par paliers de top-up: 25 MAD en dessous de 1500 MAD, 22 MAD de 1500 a 2999 MAD, 20 MAD de 3000 a 4999 MAD, puis 18 MAD a partir de 5000 MAD.',
-      },
-      {
-        question: 'Que se passe-t-il si la capacite riders est pleine au lancement ?',
-        answer:
-          'Le lancement est gere par capacite. Si tous les riders actifs sont occupes, les nouvelles entreprises passent en waitlist puis sont activees par vagues afin de garantir la fiabilite de service.',
+          'Les livreurs s inscrivent via le portail livreur, definissent leur disponibilite et commencent a accepter les livraisons proches. Ils beneficient d une commission progressive qui augmente avec le volume.',
       },
     ],
     navFeatures: 'Fonctionnalites',
@@ -353,29 +322,29 @@ const HOME_COPY: Record<AppLanguage, HomeCopy> = {
     navPricing: 'Tarifs',
     navPortals: 'Portails',
     navFaq: 'FAQ',
-    heroHeadline: 'Livrez plus vite a Tanger',
-    heroSubheadline: 'La marketplace B2B qui connecte les entreprises avec des livreurs professionnels pour des livraisons le jour meme, un suivi en temps reel et une logistique simplifiee.',
-    heroStats: [
-      { value: '500+', label: 'Livraisons' },
-      { value: '50+', label: 'Livreurs' },
-      { value: '98%', label: 'A l\'heure' },
+    heroHeadline: 'Arretez de courir apres vos livreurs. Suivez vos livraisons.',
+    heroSubheadline: 'The 1000 donne aux entreprises de Tanger un tableau de bord unique pour demander, assigner et suivre les livraisons du jour avec des livreurs professionnels — fini le chaos WhatsApp.',
+    heroValueProps: [
+      { label: 'Livraison le jour meme' },
+      { label: 'Suivi GPS en direct' },
+      { label: 'Preuve de livraison' },
     ],
-    trustTitle: 'Les entreprises de Tanger nous font confiance',
-    trustStats: [
-      { value: '500+', label: 'Livraisons effectuees' },
-      { value: '50+', label: 'Livreurs actifs' },
-      { value: '98%', label: 'Taux de ponctualite' },
-      { value: '4.8', label: 'Note moyenne' },
+    trustTitle: 'La confiance des pharmacies, commerces et fournisseurs de Tanger',
+    trustPillars: [
+      { label: 'Livraison le jour meme' },
+      { label: 'Suivi GPS en direct' },
+      { label: 'Livreurs professionnels' },
+      { label: 'Preuve de livraison' },
     ],
     howItWorksTitle: 'Comment ca marche',
     howItWorksSteps: [
-      { title: 'Demandez une livraison', desc: 'Soumettez vos details de livraison depuis le portail entreprise en quelques secondes.' },
-      { title: 'Livreur assigne', desc: 'Notre systeme attribue instantanement votre demande au livreur disponible le plus proche.' },
-      { title: 'Suivez et recevez', desc: 'Suivez votre livraison en temps reel sur la carte jusqu a destination.' },
+      { title: 'Placez un point, decrivez votre colis', desc: 'Ouvrez le portail entreprise, indiquez vos points de retrait et de livraison, et ajoutez les details. Ca prend environ 30 secondes.' },
+      { title: 'On trouve le livreur le plus proche', desc: 'La plateforme propose instantanement la course aux livreurs disponibles a proximite. Quelqu un accepte en quelques minutes.' },
+      { title: 'Suivez tout en direct', desc: 'Suivez votre livreur sur la carte du retrait a la livraison. Vous recevez une confirmation des que c est fait.' },
     ],
-    ctaTitle: 'Pret a optimiser vos livraisons ?',
-    ctaSubtitle: 'Rejoignez les entreprises de Tanger qui utilisent deja The 1000 pour un service de coursier B2B fiable et suivi.',
-    ctaButton: 'Commencer maintenant',
+    ctaTitle: 'Votre premiere livraison est a 30 minutes',
+    ctaSubtitle: 'Creez votre compte entreprise, demandez une livraison, et suivez-la en direct sur la carte.',
+    ctaButton: 'Creer votre compte',
     footerPlatform: 'Plateforme',
     footerCompany: 'Entreprise',
     footerConnect: 'Contact',
@@ -384,36 +353,36 @@ const HOME_COPY: Record<AppLanguage, HomeCopy> = {
     footerLocation: 'Tanger, Maroc',
   },
   ar: {
-    heroBadge: 'منصة توصيل بين الشركات - طنجة، المغرب',
-    getStarted: 'ابدأ الآن',
-    viewPortals: 'عرض البوابات',
+    heroBadge: 'منصة توصيل بين الشركات — طنجة، المغرب',
+    getStarted: 'اطلب عرضًا تجريبيًا',
+    viewPortals: 'شاهد كيف تعمل',
     features: [
-      { title: 'تتبع GPS مباشر', desc: 'شاهد السائقين المتاحين مباشرة على الخريطة وتتبع كل عملية توصيل من الاستلام حتى التسليم.' },
-      { title: 'خطط اشتراك مرنة', desc: 'باقات شهرية وسنوية مصممة لتناسب جميع أحجام الأعمال.' },
-      { title: 'أرباح تصاعدية', desc: 'يزداد دخل السائق مع كل عملية توصيل عبر نظام العمولات المتدرج.' },
-      { title: 'تتبع حي', desc: 'تابع كل عملية من الاستلام حتى التسليم مع تحديثات مباشرة على الخريطة.' },
+      { title: 'اعرف أين سائقك. دائمًا.', desc: 'افتح لوحة التحكم وشاهد كل سائق نشط على الخريطة. لا حاجة للاتصال والسؤال "وين نتا؟" — فقط تحقق من العرض المباشر.' },
+      { title: 'ادفع فقط مقابل ما تستخدمه', desc: 'ابدأ بـ 30 درهم للتوصيلة بدون التزام. كلما زاد حجمك، افتح أسعارًا تصل إلى 18 درهم مع Wallet+.' },
+      { title: 'السائقون يكسبون أكثر، وأنت تحصل على خدمة أفضل', desc: 'عمولتنا التصاعدية تكافئ السائقين الأكثر نشاطًا — فتحصل دائمًا على محترفين متحمسين وذوي خبرة.' },
+      { title: 'من الطلب إلى إثبات التسليم', desc: 'أنشئ طلب توصيل وتابعه من الاستلام إلى النقل حتى التسليم. احصل على تأكيد OTP أو صورة عند الوصول.' },
     ],
-    aboutLabel: 'حول The 1000',
-    aboutTitle: 'سوق التوصيل B2B في طنجة',
+    aboutLabel: 'لماذا The 1000',
+    aboutTitle: 'توصيلاتك، تحت السيطرة',
     aboutBody:
-      'The 1000 هي منصة توصيل بين الشركات في طنجة، المغرب. تربط الشركات التي تحتاج توصيلات فورية أو في نفس اليوم بشبكة من السائقين المحترفين، مع تتبع GPS مباشر، وتسعير بالاشتراك، ولوحة تحكم مركزية لإدارة كل عملية توصيل من الطلب حتى التسليم.',
+      'The 1000 منصة توصيل مصممة لشركات طنجة. اطلب توصيلة، نربطك بسائق محترف، وتتبع كل خطوة على خريطة مباشرة — من الاستلام إلى إثبات التسليم. بدون اشتراك، بدون حد أدنى.',
     portalsLabel: 'البوابات',
     portalsTitle: 'اختر بوابتك',
-    portalsDescription: 'اختر التطبيق المناسب لدورك داخل منصة The 1000.',
+    portalsDescription: 'كل بوابة مصممة لدور محدد على المنصة.',
     apps: [
       {
         title: 'لوحة تحكم الإدارة',
-        description: 'إدارة السائقين والشركات ومتابعة كل عمليات التوصيل في الوقت الحقيقي.',
+        description: 'راقب كل سائق وتوصيلة في طنجة، أدر الشركات وتعامل مع المشكلات.',
         badge: 'تحكم المنصة',
       },
       {
         title: 'بوابة الشركات',
-        description: 'اطلب التوصيل، تتبع السائقين، وأدر اشتراكك بسهولة.',
+        description: 'أنشئ طلبات التوصيل، تتبع السائقين مباشرة، واطلع على سجل التوصيلات الكامل — كل شيء من شاشة واحدة.',
         badge: 'للشركات',
       },
       {
         title: 'تطبيق السائق',
-        description: 'اقبل الطلبات، تابع أرباحك، وزد دخلك مع كل رحلة.',
+        description: 'استعرض عروض التوصيل، انتقل إلى نقاط الاستلام، وتابع أرباحك وهي تنمو.',
         badge: 'للسائقين',
       },
     ],
@@ -431,79 +400,74 @@ const HOME_COPY: Record<AppLanguage, HomeCopy> = {
     hiddenCredentialsNote: 'ملاحظة: تتم إعادة تعيين هذه الحسابات بشكل دوري لأسباب أمنية.',
     faqLabel: 'الأسئلة الشائعة',
     faqTitle: 'أسئلة متكررة',
-    faqSubtitle: 'كل ما تحتاج معرفته عن منصة التوصيل The 1000.',
+    faqSubtitle: 'الأسئلة الأكثر شيوعًا حول استخدام The 1000 لتوصيلاتك.',
     faqAriaLabel: 'الأسئلة الشائعة',
     footer: 'منصة توصيل B2B، طنجة، المغرب',
     faqs: [
       {
-        question: 'ما هي منصة The 1000؟',
+        question: 'ما هي The 1000؟',
         answer:
-          'The 1000 منصة توصيل بين الشركات مقرها طنجة، المغرب. تربط الشركات التي تحتاج توصيلًا سريعًا بشبكة من السائقين المحترفين مع تتبع مباشر وإدارة مركزية للطلبات.',
+          'منصة توصيل لشركات طنجة. تطلب توصيلة، نربطك بسائق محترف، وتتابع كل شيء مباشرة على الخريطة حتى الوصول.',
       },
       {
-        question: 'كيف تعمل The 1000 للشركات في طنجة؟',
+        question: 'كيف تعمل؟',
         answer:
-          'تشترك الشركة في The 1000 وتطلب عمليات التوصيل من بوابة الشركات. المنصة تعيّن سائقًا متاحًا فورًا، ويمكن متابعة الرحلة بالكامل على الخريطة حتى التسليم.',
+          'افتح بوابة الشركات، حدد نقطة الاستلام والتسليم، وأرسل الطلب. سائق قريب يقبل خلال دقائق. تتابع كل شيء على الخريطة.',
       },
       {
-        question: 'ما المناطق التي تغطيها المنصة حاليًا؟',
+        question: 'ما المناطق التي تغطونها؟',
         answer:
-          'تعمل The 1000 حاليًا داخل مدينة طنجة مع خدمات توصيل B2B في نفس اليوم وبشكل سريع، مع خطط للتوسع لاحقًا داخل المنطقة.',
+          'نعمل حاليًا في جميع أنحاء مدينة طنجة. التوسع نحو جهة طنجة-تطوان-الحسيمة مخطط له.',
       },
       {
-        question: 'ما أنواع الشحنات التي تتعامل معها The 1000؟',
+        question: 'ماذا يمكنني إرسال؟',
         answer:
-          'تدعم المنصة شحنات B2B مثل الوثائق والطرود والشحنات بين الشركات، وهي مناسبة للصيدليات والمتاجر والموردين وشركات الخدمات.',
+          'وثائق وطرود وشحنات بين الشركات. نعمل مع الصيدليات والمتاجر والموردين وشركات الخدمات التي تحتاج توصيلًا في نفس اليوم داخل طنجة.',
       },
       {
-        question: 'كيف يتم تنظيم خطط الاشتراك؟',
+        question: 'كم التكلفة؟',
         answer:
-          'توفر The 1000 باقات شهرية وسنوية. كل باقة تحدد حجم التوصيلات والسعر لكل توصيل ومستوى المزايا المتاحة.',
+          '30 درهم للتوصيلة بنظام الدفع عند الاستخدام. اشترِ باقة رصيد بـ 25 درهم للتوصيلة، أو استخدم Wallet+ لفتح أسعار تبدأ من 18 درهم. بدون اشتراك، بدون رسوم مخفية.',
       },
       {
-        question: 'هل يوجد تتبع مباشر للتوصيل؟',
+        question: 'هل يمكنني تتبع توصيلتي مباشرة؟',
         answer:
-          'نعم، كل عملية توصيل تتضمن تتبع GPS مباشر. يمكن للشركة متابعة حركة السائق لحظة بلحظة حتى إتمام التسليم.',
+          'نعم. كل توصيلة تتضمن تتبع GPS مباشر. تشاهد سائقك يتحرك على الخريطة من لحظة القبول حتى التسليم.',
       },
       {
-        question: 'كيف ينضم السائقون إلى The 1000؟',
+        question: 'كيف ينضم السائقون؟',
         answer:
-          'يسجل السائقون عبر بوابة السائق، ثم يحددون توفرهم ويقبلون الطلبات القريبة ويتابعون أرباحهم مباشرة داخل التطبيق.',
-      },
-      {
-        question: 'كيف يتم احتساب تكلفة التوصيل؟',
-        answer:
-          'التسعير يعتمد أساسًا على الاشتراك. تدفع الشركة باقة شهرية أو سنوية تشمل حجمًا محددًا من الطلبات، ثم رسومًا إضافية عند تجاوز الحد.',
+          'يسجل السائقون عبر بوابة السائق، يحددون توفرهم، ويبدأون بقبول التوصيلات القريبة. يحصلون على عمولة تصاعدية تزداد مع حجم العمل.',
       },
     ],
     navFeatures: 'المزايا',
     navHowItWorks: 'كيف تعمل',
-    navPricing: 'الاسعار',
+    navPricing: 'الأسعار',
     navPortals: 'البوابات',
     navFaq: 'الأسئلة الشائعة',
-    heroHeadline: 'وصّل أسرع في طنجة',
-    heroSubheadline: 'سوق التوصيل B2B الذي يربط الشركات بسائقين محترفين للتوصيل في نفس اليوم، مع تتبع مباشر ولوجستيات سلسة.',
-    heroStats: [
-      { value: '500+', label: 'عملية توصيل' },
-      { value: '50+', label: 'سائق' },
-      { value: '98%', label: 'في الوقت' },
+    heroHeadline: 'توقّف عن ملاحقة السائقين. تتبّع توصيلاتك.',
+    heroSubheadline: 'The 1000 يمنح شركات طنجة لوحة تحكم واحدة لطلب وتعيين وتتبع التوصيلات في نفس اليوم مع سائقين محترفين — بدون فوضى واتساب.',
+    heroValueProps: [
+      { label: 'توصيل في نفس اليوم' },
+      { label: 'تتبع GPS مباشر' },
+      { label: 'إثبات التسليم' },
     ],
-    trustTitle: 'موثوق من طرف شركات طنجة',
-    trustStats: [
-      { value: '500+', label: 'عملية توصيل مكتملة' },
-      { value: '50+', label: 'سائق نشط' },
-      { value: '98%', label: 'نسبة الالتزام' },
-      { value: '4.8', label: 'التقييم' },
+    trustTitle: 'موثوق من الصيدليات والمتاجر والموردين في طنجة',
+    trustPillars: [
+      { label: 'توصيل في نفس اليوم' },
+      { label: 'تتبع GPS مباشر' },
+      { label: 'سائقون محترفون' },
+      { label: 'إثبات التسليم' },
     ],
     howItWorksTitle: 'كيف تعمل المنصة',
     howItWorksSteps: [
-      { title: 'اطلب توصيلة', desc: 'أدخل تفاصيل التوصيل عبر بوابة الشركات في ثوانٍ.' },
-      { title: 'تعيين سائق', desc: 'يعيّن النظام فورًا أقرب سائق متاح لطلبك.' },
-      { title: 'تتبع واستلم', desc: 'تابع توصيلتك على الخريطة مباشرة حتى تصل لوجهتها.' },
+      { title: 'حدد نقطة، وصف طردك', desc: 'افتح بوابة الشركات، حدد نقاط الاستلام والتسليم، وأضف تفاصيل الطلب. يستغرق حوالي 30 ثانية.' },
+      { title: 'نجد أقرب سائق', desc: 'المنصة تعرض الطلب فورًا على السائقين المتاحين بالقرب. أحدهم يقبل خلال دقائق.' },
+      { title: 'تابع كل شيء مباشرة', desc: 'تتبع سائقك على الخريطة من الاستلام حتى التسليم. تحصل على تأكيد لحظة الوصول.' },
     ],
-    ctaTitle: 'مستعد لتحسين عمليات التوصيل؟',
-    ctaSubtitle: 'انضم إلى شركات طنجة التي تستخدم The 1000 بالفعل لخدمات توصيل B2B موثوقة ومتتبعة.',
-    ctaButton: 'ابدأ الآن',
+    ctaTitle: 'أول توصيلة لك على بُعد 30 دقيقة',
+    ctaSubtitle: 'أنشئ حساب شركتك، اطلب توصيلة، وتابعها مباشرة على الخريطة.',
+    ctaButton: 'أنشئ حسابك',
     footerPlatform: 'المنصة',
     footerCompany: 'الشركة',
     footerConnect: 'تواصل',
@@ -516,72 +480,66 @@ const HOME_COPY: Record<AppLanguage, HomeCopy> = {
 const PRICING_COPY: Record<AppLanguage, PricingContent> = {
   en: {
     label: 'Pricing',
-    title: 'The1 Capacity-Smart Credits',
+    title: 'Simple pricing that scales with you',
     subtitle:
-      'Pick the model that fits your delivery volume: pay per ride, lock pack rates, or unlock Wallet+ discounted pricing as you scale.',
-    ratesTitle: 'Rate Ladder',
+      'Start with pay-per-delivery. As your business grows, unlock lower rates automatically.',
+    ratesTitle: 'How It Works',
     rates: [
-      { label: 'Pay on Use', value: '30 MAD / ride', note: 'Best for occasional delivery demand.' },
-      { label: 'Pack Credits', value: '25 MAD / ride', note: 'Prepaid packs with fixed ride credits.' },
-      { label: 'Wallet+', value: 'Down to 18 MAD / ride', note: 'Volume top-up model for recurring high usage.' },
+      { label: 'Pay as You Go', value: '30 MAD / delivery', note: 'No commitment. Pay only when you need a delivery.' },
+      { label: 'Credit Packs', value: '25 MAD / delivery', note: 'Buy a pack upfront and save on every delivery.' },
+      { label: 'Wallet+', value: 'From 18 MAD / delivery', note: 'Top up your wallet — the more you add, the lower your rate.' },
     ],
     packsTitle: 'Credit Packs',
     packs: [
-      { name: 'Starter 8', details: '8 rides - 30 days', price: '200 MAD' },
-      { name: 'Trimestrial 24', details: '24 rides - 90 days', price: '600 MAD' },
-      { name: 'Semestrial 48', details: '48 rides - 180 days', price: '1200 MAD' },
-      { name: 'Annual 96', details: '96 rides - 365 days', price: '2400 MAD' },
+      { name: 'Starter 8', details: '8 deliveries — 30 days', price: '200 MAD' },
+      { name: 'Trimestrial 24', details: '24 deliveries — 90 days', price: '600 MAD' },
+      { name: 'Semestrial 48', details: '48 deliveries — 180 days', price: '1200 MAD' },
+      { name: 'Annual 96', details: '96 deliveries — 365 days', price: '2400 MAD' },
     ],
     walletTierNote:
-      'Wallet+ tiers by top-up amount: 25 (<1500 MAD), 22 (1500-2999 MAD), 20 (3000-4999 MAD), 18 (>=5000 MAD).',
-    capacityNote:
-      'Launch mode: capacity-controlled onboarding with 4 riders online. New accounts enter waitlist when rider capacity is full.',
+      'Wallet+ rates by top-up amount: 25 MAD (<1500), 22 MAD (1500-2999), 20 MAD (3000-4999), 18 MAD (5000+).',
   },
   fr: {
     label: 'Tarifs',
-    title: 'The1 Capacity-Smart Credits',
+    title: 'Des tarifs simples qui evoluent avec vous',
     subtitle:
-      'Choisissez le modele adapte a votre volume: paiement a l usage, packs prepayes, ou Wallet+ avec tarif reduit quand votre volume augmente.',
-    ratesTitle: 'Echelle Tarifaire',
+      'Commencez avec le paiement a la livraison. En grandissant, debloquez automatiquement des tarifs reduits.',
+    ratesTitle: 'Comment ca marche',
     rates: [
-      { label: 'Pay on Use', value: '30 MAD / course', note: 'Ideal pour les besoins occasionnels.' },
-      { label: 'Pack Credits', value: '25 MAD / course', note: 'Packs prepayes avec credits de courses fixes.' },
-      { label: 'Wallet+', value: 'Jusqu a 18 MAD / course', note: 'Mode top-up volume pour usage recurrent.' },
+      { label: 'Paiement a l usage', value: '30 MAD / livraison', note: 'Sans engagement. Payez uniquement quand vous avez besoin d une livraison.' },
+      { label: 'Packs Credits', value: '25 MAD / livraison', note: 'Achetez un pack a l avance et economisez sur chaque livraison.' },
+      { label: 'Wallet+', value: 'Des 18 MAD / livraison', note: 'Rechargez votre wallet — plus vous ajoutez, plus le tarif baisse.' },
     ],
     packsTitle: 'Packs Credits',
     packs: [
-      { name: 'Starter 8', details: '8 courses - 30 jours', price: '200 MAD' },
-      { name: 'Trimestrial 24', details: '24 courses - 90 jours', price: '600 MAD' },
-      { name: 'Semestrial 48', details: '48 courses - 180 jours', price: '1200 MAD' },
-      { name: 'Annual 96', details: '96 courses - 365 jours', price: '2400 MAD' },
+      { name: 'Starter 8', details: '8 livraisons — 30 jours', price: '200 MAD' },
+      { name: 'Trimestrial 24', details: '24 livraisons — 90 jours', price: '600 MAD' },
+      { name: 'Semestrial 48', details: '48 livraisons — 180 jours', price: '1200 MAD' },
+      { name: 'Annual 96', details: '96 livraisons — 365 jours', price: '2400 MAD' },
     ],
     walletTierNote:
-      'Paliers Wallet+ par montant de top-up: 25 (<1500 MAD), 22 (1500-2999 MAD), 20 (3000-4999 MAD), 18 (>=5000 MAD).',
-    capacityNote:
-      'Mode lancement: onboarding controle par capacite avec 4 riders en ligne. Les nouveaux comptes passent en waitlist si la capacite est pleine.',
+      'Tarifs Wallet+ par montant de recharge: 25 MAD (<1500), 22 MAD (1500-2999), 20 MAD (3000-4999), 18 MAD (5000+).',
   },
   ar: {
-    label: 'الاسعار',
-    title: 'The1 Capacity-Smart Credits',
+    label: 'الأسعار',
+    title: 'تسعير بسيط ينمو معك',
     subtitle:
-      'اختر النموذج المناسب لحجم الطلب: الدفع لكل طلب، باقات مسبقة، او Wallet+ بسعر اقل مع زيادة الحجم.',
-    ratesTitle: 'مستويات التسعير',
+      'ابدأ بالدفع عند كل توصيلة. كلما نما نشاطك، تفتح تلقائيًا أسعارًا أقل.',
+    ratesTitle: 'كيف يعمل',
     rates: [
-      { label: 'Pay on Use', value: '30 MAD / طلب', note: 'مناسب للطلبات المتقطعة.' },
-      { label: 'Pack Credits', value: '25 MAD / طلب', note: 'باقات مسبقة مع رصيد طلبات ثابت.' },
-      { label: 'Wallet+', value: 'حتى 18 MAD / طلب', note: 'تسعير مخفض حسب حجم التعبئة.' },
+      { label: 'ادفع عند الاستخدام', value: '30 درهم / توصيلة', note: 'بدون التزام. ادفع فقط عندما تحتاج توصيلة.' },
+      { label: 'باقات الرصيد', value: '25 درهم / توصيلة', note: 'اشترِ باقة مسبقًا ووفّر على كل توصيلة.' },
+      { label: 'Wallet+', value: 'من 18 درهم / توصيلة', note: 'اشحن محفظتك — كلما أضفت أكثر، انخفض السعر.' },
     ],
     packsTitle: 'باقات الرصيد',
     packs: [
-      { name: 'Starter 8', details: '8 طلبات - 30 يوم', price: '200 MAD' },
-      { name: 'Trimestrial 24', details: '24 طلب - 90 يوم', price: '600 MAD' },
-      { name: 'Semestrial 48', details: '48 طلب - 180 يوم', price: '1200 MAD' },
-      { name: 'Annual 96', details: '96 طلب - 365 يوم', price: '2400 MAD' },
+      { name: 'Starter 8', details: '8 توصيلات — 30 يوم', price: '200 درهم' },
+      { name: 'Trimestrial 24', details: '24 توصيلة — 90 يوم', price: '600 درهم' },
+      { name: 'Semestrial 48', details: '48 توصيلة — 180 يوم', price: '1200 درهم' },
+      { name: 'Annual 96', details: '96 توصيلة — 365 يوم', price: '2400 درهم' },
     ],
     walletTierNote:
-      'مستويات Wallet+ حسب مبلغ التعبئة: 25 (<1500 MAD)، 22 (1500-2999 MAD)، 20 (3000-4999 MAD)، 18 (>=5000 MAD).',
-    capacityNote:
-      'وضع الاطلاق: انضمام تدريجي بسعة 4 سائقين متاحين. عند الامتلاء يتم تحويل الحسابات الجديدة الى قائمة انتظار.',
+      'أسعار Wallet+ حسب مبلغ الشحن: 25 درهم (أقل من 1500)، 22 درهم (1500-2999)، 20 درهم (3000-4999)، 18 درهم (5000+).',
   },
 };
 
@@ -805,13 +763,12 @@ export default function HomePage() {
               </Button>
             </div>
 
-            {/* Stats bar */}
-            <div className="mt-10 flex items-center justify-center gap-8 lg:justify-start">
-              {content.heroStats.map((stat, i) => (
-                <div key={i} className="text-center lg:text-start">
-                  <p className="text-2xl font-extrabold text-foreground">{stat.value}</p>
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
-                </div>
+            {/* Value props */}
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
+              {content.heroValueProps.map((prop, i) => (
+                <span key={i} className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-700">
+                  {prop.label}
+                </span>
               ))}
             </div>
           </div>
@@ -828,15 +785,14 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Trust Stats Strip ── */}
+      {/* ── Trust / Value Pillars Strip ── */}
       <section className="bg-emerald-50/60 py-16">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
           <h2 className="mb-10 text-center text-2xl font-bold text-foreground">{content.trustTitle}</h2>
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-            {content.trustStats.map((stat, i) => (
+            {content.trustPillars.map((pillar, i) => (
               <div key={i} className="rounded-2xl border border-border bg-white p-6 text-center shadow-sm">
-                <p className="text-4xl font-extrabold text-emerald-600">{stat.value}</p>
-                <p className="mt-2 text-sm text-muted-foreground">{stat.label}</p>
+                <p className="text-lg font-bold text-emerald-700">{pillar.label}</p>
               </div>
             ))}
           </div>
@@ -931,9 +887,6 @@ export default function HomePage() {
             </div>
             <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               {pricing.walletTierNote}
-            </p>
-            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-              {pricing.capacityNote}
             </p>
           </div>
         </div>
